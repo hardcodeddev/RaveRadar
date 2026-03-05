@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "vNKMH5xPKl/f9Y0b1S++xZeHJI5aF9F//Zcu7MTfgPo=",
+  "Source": "RaveRadar.Api",
+  "BasePath": "_content/RaveRadar.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
