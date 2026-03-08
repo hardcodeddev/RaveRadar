@@ -1,0 +1,67 @@
+RaveRadar EDM Artist Dataset (Modernized)
+
+--- TRENDING & MODERN ---
+1. Levity (Dubstep, Electronic) - Popularity: 88
+2. John Summit (Tech House) - Popularity: 93
+3. Dom Dolla (House, Tech House) - Popularity: 91
+4. Mau P (Tech House) - Popularity: 89
+5. FISHER (House, Tech House) - Popularity: 94
+6. Knock2 (Trap, Bass House) - Popularity: 90
+7. ISOxo (Trap, Bass) - Popularity: 89
+8. Sammy Virji (UK Garage) - Popularity: 88
+9. Fred again.. (Electronic, House) - Popularity: 95
+10. Barry Can't Swim (House, Electronic) - Popularity: 87
+11. Chase & Status (Drum & Bass) - Popularity: 94
+12. Hedex (Drum & Bass, Jump Up) - Popularity: 89
+13. Bou (Drum & Bass) - Popularity: 90
+14. Sub Focus (Drum & Bass) - Popularity: 91
+15. Dimension (Drum & Bass) - Popularity: 89
+16. Sara Landry (Hard Techno) - Popularity: 90
+17. Indira Paganotto (Psy-Techno) - Popularity: 87
+18. Anyma (Melodic Techno) - Popularity: 94
+19. Charlotte de Witte (Techno) - Popularity: 92
+20. Amelie Lens (Techno) - Popularity: 90
+
+--- HOUSE & TECH HOUSE ---
+21. Chris Lake (Tech House) - Popularity: 92
+22. Cloonee (Tech House) - Popularity: 88
+23. James Hype (House, Tech House) - Popularity: 90
+24. SIDEPIECE (Tech House) - Popularity: 86
+25. Matroda (Bass House, Tech House) - Popularity: 87
+26. Vintage Culture (House, Tech House) - Popularity: 90
+27. CID (Tech House) - Popularity: 84
+28. Joshwa (Tech House) - Popularity: 82
+29. Noizu (Tech House) - Popularity: 85
+30. Westend (Tech House) - Popularity: 83
+31. Pawsa (Tech House) - Popularity: 86
+32. Michael Bibi (Tech House) - Popularity: 88
+33. Jamie Jones (Tech House) - Popularity: 87
+34. Solomun (Deep House) - Popularity: 89
+35. Black Coffee (Afro House) - Popularity: 91
+36. CamelPhat (Melodic Techno) - Popularity: 90
+37. Gorgon City (House) - Popularity: 88
+38. Duke Dumont (House) - Popularity: 89
+39. MK (House) - Popularity: 88
+40. Claptone (House) - Popularity: 87
+
+--- DUBSTEP & BASS ---
+41. Subtronics (Dubstep) - Popularity: 92
+42. Excision (Dubstep) - Popularity: 93
+43. Skrillex (Bass, Dubstep) - Popularity: 96
+44. Svdden Death (Dubstep, Riddim) - Popularity: 90
+45. Tape B (Bass, Trap) - Popularity: 88
+46. Rezz (Midtempo Bass) - Popularity: 91
+47. Zeds Dead (Bass) - Popularity: 92
+48. Ganja White Night (Dubstep) - Popularity: 89
+49. Wooli (Dubstep) - Popularity: 88
+50. Virtual Riot (Dubstep) - Popularity: 87
+51. Ray Volpe (Dubstep) - Popularity: 89
+52. HOL! (Dubstep, Riddim) - Popularity: 86
+53. Infekt (Dubstep, Riddim) - Popularity: 84
+54. Marauda (Dubstep, Riddim) - Popularity: 85
+55. Barely Alive (Dubstep) - Popularity: 85
+56. Sullivan King (Dubstep, Metal) - Popularity: 88
+57. Kayzo (Hard Bass) - Popularity: 87
+58. Crankdat (Dubstep) - Popularity: 88
+59. Kompany (Dubstep) - Popularity: 83
+60. Trivecta (Melodic Dubstep) - Popularity: 84

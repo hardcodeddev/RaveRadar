@@ -8,4 +8,6 @@ public class User
     public string? Location { get; set; }
     public List<Artist> FavoriteArtists { get; set; } = new();
     public List<Genre> FavoriteGenres { get; set; } = new();
+    public List<string> FavoriteSongs { get; set; } = new(); // Format: "Artist - Song Name"
+    public List<SavedTrack> SavedTracks { get; set; } = new();
 }

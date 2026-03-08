@@ -1,0 +1,17 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# .NET
+bin/
+obj/
+*.db
+*.user
+*.lock.json
+.vs/
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.*

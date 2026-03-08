@@ -3264,19 +3264,19 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\pmanf\\.nuget\\packages\\": {}
+    "/Users/prestonfernando/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\pmanf\\RaveRadar\\RaveRadar.Api\\RaveRadar.Api.csproj",
+      "projectUniqueName": "/Users/prestonfernando/Desktop/RaveRadar/RaveRadar.Api/RaveRadar.Api.csproj",
       "projectName": "RaveRadar.Api",
-      "projectPath": "C:\\Users\\pmanf\\RaveRadar\\RaveRadar.Api\\RaveRadar.Api.csproj",
-      "packagesPath": "C:\\Users\\pmanf\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\pmanf\\RaveRadar\\RaveRadar.Api\\obj\\",
+      "projectPath": "/Users/prestonfernando/Desktop/RaveRadar/RaveRadar.Api/RaveRadar.Api.csproj",
+      "packagesPath": "/Users/prestonfernando/.nuget/packages/",
+      "outputPath": "/Users/prestonfernando/Desktop/RaveRadar/RaveRadar.Api/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\pmanf\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "/Users/prestonfernando/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -3294,11 +3294,6 @@
         "warnAsError": [
           "NU1605"
         ]
-      },
-      "restoreAuditProperties": {
-        "enableAudit": "true",
-        "auditLevel": "low",
-        "auditMode": "direct"
       }
     },
     "frameworks": {
@@ -3361,7 +3356,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.302/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/opt/homebrew/Cellar/dotnet@8/8.0.124/libexec/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

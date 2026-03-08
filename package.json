@@ -1,0 +1,15 @@
+{
+  "name": "raveradar-root",
+  "version": "1.0.0",
+  "description": "Root project for RaveRadar",
+  "scripts": {
+    "dev": "npx concurrently -n \"API,Client\" -c \"blue,green\" \"dotnet run --project RaveRadar.Api\" \"npm run dev --prefix RaveRadar.Client\"",
+    "install:all": "dotnet restore RaveRadar.Api && npm install --prefix RaveRadar.Client",
+    "start": "npm run dev"
+  },
+  "keywords": [],
+  "author": "",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

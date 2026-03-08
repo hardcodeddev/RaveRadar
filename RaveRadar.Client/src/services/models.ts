@@ -4,6 +4,10 @@ export interface Artist {
     spotifyId?: string;
     imageUrl?: string;
     genres: string[];
+    popularity: number;
+    bio?: string;
+    topTracks: string[];
+    reason?: string;
 }
 
 export interface Genre {
@@ -23,6 +27,7 @@ export interface Event {
     longitude: number;
     artistNames: string[];
     genreNames: string[];
+    reason?: string;
 }
 
 export interface User {
@@ -31,6 +36,8 @@ export interface User {
     location?: string;
     favoriteArtists: Artist[];
     favoriteGenres: Genre[];
+    favoriteSongs: string[];
+    savedTracks: SavedTrack[];
 }
 
 export interface RegisterDto {
@@ -48,4 +55,37 @@ export interface PreferencesDto {
     location?: string;
     artistIds?: number[];
     genreIds?: number[];
+    favoriteSongs?: string[];
+}
+
+export interface SavedTrack {
+    id: number;
+    spotifyTrackId?: string;
+    songName: string;
+    artistName: string;
+    artistSpotifyId?: string;
+    imageUrl?: string;
+    previewUrl?: string;
+    externalUrl?: string;
+    genres: string[];
+    vibes: string[];
+    addedAt: string;
+}
+
+export interface SongResult {
+    artistId: number;
+    artistName: string;
+    songName: string;
+    artistSpotifyId?: string;
+    spotifyTrackId?: string;
+    imageUrl?: string;
+    previewUrl?: string;
+    externalUrl?: string;
+    source?: string;
+    reason?: string;
+}
+
+export interface RecommendationsResult {
+    artists: Artist[];
+    songs: SongResult[];
 }

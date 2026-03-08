@@ -17,7 +17,7 @@ public class EventsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Event>>> GetEvents([FromQuery] string? city, [FromQuery] int? userId)
+    public async Task<ActionResult<IEnumerable<Event>>> GetEvents([FromQuery] string? city, [FromQuery] int? userId, [FromQuery] bool allCities = false)
     {
         var query = _context.Events.AsQueryable();
 
@@ -30,20 +30,36 @@ public class EventsController : ControllerBase
 
             if (user != null)
             {
-                var events = await _context.Events.ToListAsync();
-                
-                // Score events based on preferences
-                var scoredEvents = events.Select(e => new
+                // Filter by city if the user has a location set and allCities is not requested
+                var eventsQuery = _context.Events.AsQueryable();
+                var effectiveCity = city ?? user.Location;
+
+                if (!allCities && !string.IsNullOrEmpty(effectiveCity))
                 {
-                    Event = e,
-                    Score = CalculateScore(e, user)
+                    eventsQuery = eventsQuery.Where(e => e.City != null && e.City.ToLower() == effectiveCity.ToLower());
+                }
+
+                var events = await eventsQuery.ToListAsync();
+
+                // Score events based on preferences
+                var scoredEvents = events.Select(e =>
+                {
+                    var (score, reason) = ScoreWithReason(e, user);
+                    return new { Event = e, Score = score, Reason = reason };
                 })
                 .OrderByDescending(s => s.Score)
                 .ThenBy(s => s.Event.Date)
-                .Select(s => s.Event)
+                .Select(s => new
+                {
+                    s.Event.Id, s.Event.Name, s.Event.Date, s.Event.Venue,
+                    s.Event.City, s.Event.TicketUrl, s.Event.ImageUrl,
+                    s.Event.Latitude, s.Event.Longitude,
+                    s.Event.ArtistNames, s.Event.GenreNames,
+                    s.Reason
+                })
                 .ToList();
 
-                return scoredEvents;
+                return Ok(scoredEvents);
             }
         }
 
@@ -55,36 +71,34 @@ public class EventsController : ControllerBase
         return await query.ToListAsync();
     }
 
-    private int CalculateScore(Event e, User user)
+    private static (int Score, string? Reason) ScoreWithReason(Event e, User user)
     {
         int score = 0;
+        var reasons = new List<string>();
 
-        // Location match (High priority)
-        if (!string.IsNullOrEmpty(user.Location) && e.City != null && e.City.ToLower() == user.Location.ToLower())
+        var favArtistNames = user.FavoriteArtists.Select(a => a.Name.ToLower()).ToList();
+        var matchedArtist = e.ArtistNames.FirstOrDefault(an => favArtistNames.Contains(an.ToLower()));
+        if (matchedArtist != null)
+        {
+            score += 50;
+            reasons.Add($"Features {matchedArtist}");
+        }
+
+        var favGenreNames = user.FavoriteGenres.Select(g => g.Name.ToLower()).ToList();
+        var matchedGenre = e.GenreNames.FirstOrDefault(gn => favGenreNames.Contains(gn.ToLower()));
+        if (matchedGenre != null)
+        {
+            score += 30;
+            reasons.Add($"{matchedGenre} event");
+        }
+
+        if (!string.IsNullOrEmpty(user.Location) && e.City != null &&
+            e.City.ToLower() == user.Location.ToLower())
         {
             score += 100;
+            if (reasons.Count == 0) reasons.Add($"Near you in {e.City}");
         }
 
-        // Artist match
-        if (user.FavoriteArtists.Any())
-        {
-            var favArtistNames = user.FavoriteArtists.Select(a => a.Name.ToLower()).ToList();
-            if (e.ArtistNames.Any(an => favArtistNames.Contains(an.ToLower())))
-            {
-                score += 50;
-            }
-        }
-
-        // Genre match
-        if (user.FavoriteGenres.Any())
-        {
-            var favGenreNames = user.FavoriteGenres.Select(g => g.Name.ToLower()).ToList();
-            if (e.GenreNames.Any(gn => favGenreNames.Contains(gn.ToLower())))
-            {
-                score += 30;
-            }
-        }
-
-        return score;
+        return (score, reasons.Count > 0 ? string.Join(" · ", reasons) : null);
     }
 }

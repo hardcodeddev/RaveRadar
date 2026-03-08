@@ -1,0 +1,270 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
+using RaveRadar.Api.Models;
+
+namespace RaveRadar.Api.Services;
+
+public class SpotifyService
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _config;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<SpotifyService> _logger;
+
+    private const string TokenCacheKey = "spotify_access_token";
+    private const string TokenUrl = "https://accounts.spotify.com/api/token";
+    private const string ApiBase = "https://api.spotify.com/v1";
+
+    public SpotifyService(
+        IHttpClientFactory httpClientFactory,
+        IConfiguration config,
+        IMemoryCache cache,
+        ILogger<SpotifyService> logger)
+    {
+        _httpClientFactory = httpClientFactory;
+        _config = config;
+        _cache = cache;
+        _logger = logger;
+    }
+
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(_config["Spotify:ClientId"]) &&
+        !string.IsNullOrWhiteSpace(_config["Spotify:ClientSecret"]);
+
+    private async Task<string?> GetAccessToken()
+    {
+        if (_cache.TryGetValue<string>(TokenCacheKey, out var cached))
+            return cached;
+
+        var clientId = _config["Spotify:ClientId"]!;
+        var clientSecret = _config["Spotify:ClientSecret"]!;
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+
+        var client = _httpClientFactory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, TokenUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        request.Content = new FormUrlEncodedContent(new[]
+        {
+            new KeyValuePair<string, string>("grant_type", "client_credentials")
+        });
+
+        try
+        {
+            var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Spotify token request failed: {Status} — {Body}", response.StatusCode, body);
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var token = doc.RootElement.GetProperty("access_token").GetString();
+            var expiresIn = doc.RootElement.GetProperty("expires_in").GetInt32();
+            _cache.Set(TokenCacheKey, token, TimeSpan.FromSeconds(expiresIn - 60));
+            return token;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to obtain Spotify access token");
+            return null;
+        }
+    }
+
+    private async Task<JsonDocument?> GetAsync(string url)
+    {
+        var token = await GetAccessToken();
+        if (token == null) return null;
+
+        var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        try
+        {
+            var response = await client.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Spotify API error {Status} for {Url}: {Body}", response.StatusCode, url, body);
+                return null;
+            }
+            return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Spotify request failed: {Url}", url);
+            return null;
+        }
+    }
+
+    public async Task<SpotifyArtistData?> FindArtist(string name)
+    {
+        var url = $"{ApiBase}/search?q={Uri.EscapeDataString(name)}&type=artist&limit=1";
+        using var doc = await GetAsync(url);
+        if (doc == null) return null;
+
+        var items = doc.RootElement.GetProperty("artists").GetProperty("items");
+        if (items.GetArrayLength() == 0) return null;
+
+        return ParseArtist(items[0]);
+    }
+
+    // Note: top-tracks and related-artists require OAuth user tokens (not client credentials).
+    // We use artist name search to get tracks instead.
+    public async Task<List<string>> GetTopTracks(string artistName)
+    {
+        var url = $"{ApiBase}/search?q={Uri.EscapeDataString($"artist:\"{artistName}\"")}&type=track&limit=10";
+        using var doc = await GetAsync(url);
+        if (doc == null) return new();
+
+        return doc.RootElement.GetProperty("tracks").GetProperty("items")
+            .EnumerateArray()
+            .Take(5)
+            .Select(t => t.GetProperty("name").GetString()!)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+    }
+
+    public async Task<List<SongResult>> SearchTracks(string query, int limit = 10, int offset = 0)
+    {
+        limit = Math.Clamp(limit, 1, 10); // Spotify Client Credentials caps at 10
+        var url = $"{ApiBase}/search?q={Uri.EscapeDataString(query)}&type=track&limit={limit}&offset={offset}";
+        _logger.LogInformation("SearchTracks: calling {Url}", url);
+        using var doc = await GetAsync(url);
+        if (doc == null)
+        {
+            _logger.LogWarning("SearchTracks: GetAsync returned null for query '{Query}'", query);
+            return new();
+        }
+
+        var results = new List<SongResult>();
+        foreach (var track in doc.RootElement.GetProperty("tracks").GetProperty("items").EnumerateArray())
+        {
+            var firstArtist = track.GetProperty("artists")[0];
+            var artistName = firstArtist.GetProperty("name").GetString()!;
+            var artistSpotifyId = firstArtist.GetProperty("id").GetString();
+            var songName = track.GetProperty("name").GetString()!;
+            var images = track.GetProperty("album").GetProperty("images");
+            var imageUrl = images.GetArrayLength() > 0
+                ? images[images.GetArrayLength() - 1].GetProperty("url").GetString()
+                : null;
+
+            string? previewUrl = null;
+            if (track.TryGetProperty("preview_url", out var pv) && pv.ValueKind != JsonValueKind.Null)
+                previewUrl = pv.GetString();
+
+            string? spotifyTrackId = null;
+            if (track.TryGetProperty("id", out var tid) && tid.ValueKind != JsonValueKind.Null)
+                spotifyTrackId = tid.GetString();
+
+            results.Add(new SongResult
+            {
+                ArtistId = 0, // resolved later by controller
+                ArtistName = artistName,
+                ArtistSpotifyId = artistSpotifyId,
+                SpotifyTrackId = spotifyTrackId,
+                SongName = songName,
+                ImageUrl = imageUrl,
+                PreviewUrl = previewUrl,
+                ExternalUrl = track.GetProperty("external_urls").GetProperty("spotify").GetString(),
+                Source = "Spotify"
+            });
+        }
+
+        return results;
+    }
+
+    // related-artists requires OAuth user tokens — not available with client credentials.
+    public Task<List<SpotifyArtistData>> GetRelatedArtists(string spotifyId) =>
+        Task.FromResult(new List<SpotifyArtistData>());
+
+    public async Task EnrichArtist(Artist artist)
+    {
+        var data = await FindArtist(artist.Name);
+        if (data == null) return;
+
+        artist.SpotifyId = data.SpotifyId;
+        artist.Popularity = data.Popularity;
+
+        if (!string.IsNullOrEmpty(data.ImageUrl))
+            artist.ImageUrl = data.ImageUrl;
+
+        if (data.Genres.Any())
+            artist.Genres = data.Genres;
+
+        var tracks = await GetTopTracks(data.Name);
+        if (tracks.Any())
+            artist.TopTracks = tracks;
+    }
+
+    public async Task<List<string>> GetArtistGenres(string spotifyId)
+    {
+        var url = $"{ApiBase}/artists/{spotifyId}";
+        using var doc = await GetAsync(url);
+        if (doc == null) return new();
+
+        if (!doc.RootElement.TryGetProperty("genres", out var genresEl))
+            return new();
+
+        return genresEl.EnumerateArray()
+            .Select(g => g.GetString()!)
+            .Where(g => !string.IsNullOrWhiteSpace(g))
+            .ToList();
+    }
+
+    public static List<string> DeriveVibes(List<string> genres)
+    {
+        var vibes = new HashSet<string>();
+        foreach (var g in genres.Select(g => g.ToLower()))
+        {
+            if (g.Contains("techno") || g.Contains("industrial") || g.Contains("dark"))
+                vibes.Add("Dark");
+            if (g.Contains("house") || g.Contains("garage") || g.Contains("funk"))
+                vibes.Add("Groovy");
+            if (g.Contains("bass") || g.Contains("dubstep") || g.Contains("riddim") || g.Contains("trap"))
+                vibes.Add("Bass Heavy");
+            if (g.Contains("trance") || g.Contains("progressive") || g.Contains("euphoric"))
+                vibes.Add("Euphoric");
+            if (g.Contains("drum and bass") || g.Contains("dnb") || g.Contains("jungle") || g.Contains("breakbeat"))
+                vibes.Add("Energetic");
+            if (g.Contains("ambient") || g.Contains("chill") || g.Contains("downtempo"))
+                vibes.Add("Chill");
+            if (g.Contains("psytrance") || g.Contains("psy") || g.Contains("psychedelic"))
+                vibes.Add("Trippy");
+            if (g.Contains("edm") || g.Contains("electro") || g.Contains("big room") || g.Contains("festival"))
+                vibes.Add("Festival");
+        }
+        return vibes.ToList();
+    }
+
+    private static SpotifyArtistData ParseArtist(JsonElement el)
+    {
+        string? imageUrl = null;
+        if (el.TryGetProperty("images", out var images) && images.GetArrayLength() > 0)
+            imageUrl = images[0].TryGetProperty("url", out var u) ? u.GetString() : null;
+
+        var genres = new List<string>();
+        if (el.TryGetProperty("genres", out var genresEl))
+            genres = genresEl.EnumerateArray().Select(g => g.GetString()!).ToList();
+
+        return new SpotifyArtistData
+        {
+            SpotifyId = el.GetProperty("id").GetString()!,
+            Name = el.GetProperty("name").GetString()!,
+            Popularity = el.TryGetProperty("popularity", out var pop) ? pop.GetInt32() : 0,
+            Genres = genres,
+            ImageUrl = imageUrl
+        };
+    }
+}
+
+public class SpotifyArtistData
+{
+    public required string SpotifyId { get; set; }
+    public required string Name { get; set; }
+    public int Popularity { get; set; }
+    public List<string> Genres { get; set; } = new();
+    public string? ImageUrl { get; set; }
+}
