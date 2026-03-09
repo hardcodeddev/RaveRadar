@@ -12,11 +12,40 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 
-// Database
+// Database - Support SQLite (local) and PostgreSQL (Production/Render)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        // Parse DATABASE_URL if provided (common in free tier providers like Supabase/Neon)
+        options.UseNpgsql(ParseDatabaseUrl(databaseUrl));
+    }
+    else if (connectionString?.Contains("Host=") == true || connectionString?.Contains("Server=") == true)
+    {
+        options.UseNpgsql(connectionString);
+    }
+    else
+    {
+        options.UseSqlite(connectionString ?? "Data Source=RaveRadar.db");
+    }
+});
 
 // Services
+...
+}
+
+app.Run();
+
+// Helper to parse DATABASE_URL (postgres://user:pass@host:port/db)
+static string ParseDatabaseUrl(string url)
+{
+    var uri = new Uri(url);
+    var userInfo = uri.UserInfo.Split(':');
+    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.Trim('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
+}
 builder.Services.AddScoped<EdmTrainService>();
 builder.Services.AddScoped<SpotifyService>();
 
@@ -57,17 +86,41 @@ builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true)
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments for debugging
+app.UseSwagger(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    options.RouteTemplate = "swagger/{documentName}/swagger.json";
+});
+
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "RaveRadar API V1");
+    c.RoutePrefix = "swagger"; // reach it at /swagger
+});
 
 app.UseRouting();
 app.UseCors("AllowClient");
-app.UseHttpsRedirection();
+
+// Basic API info/health endpoint
+app.MapGet("/api", () => Results.Ok(new 
+{ 
+    app = "RaveRadar API", 
+    status = "Healthy", 
+    swagger = "/swagger",
+    environment = app.Environment.EnvironmentName
+}));
+
+// In Docker/Render, SSL is handled at the load balancer
+if (!app.Environment.IsProduction())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Health Check
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", environment = app.Environment.EnvironmentName }));
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");
@@ -75,8 +128,17 @@ app.MapFallbackToFile("index.html");
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    context.Database.Migrate();
-    DbSeeder.Seed(context);
+    Console.WriteLine("🚀 Running migrations and seeding database...");
+    try 
+    {
+        context.Database.Migrate();
+        DbSeeder.Seed(context);
+        Console.WriteLine("✅ Database initialized successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error during startup: {ex.Message}");
+    }
 }
 
 app.Run();

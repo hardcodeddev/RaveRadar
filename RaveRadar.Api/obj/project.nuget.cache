@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "M0GBKUEUZ9u/ye483eM0Y2ty2GEOH2Q+dTxGPdVyS6ejDdva25FXoxWvPjXh5AxfcG+rTpEHsfkGAxRx1awMPQ==",
+  "dgSpecHash": "zjOAKSs/ox8=",
   "success": true,
   "projectFilePath": "/Users/prestonfernando/Desktop/RaveRadar/RaveRadar.Api/RaveRadar.Api.csproj",
   "expectedPackageFiles": [
@@ -40,6 +40,8 @@
     "/Users/prestonfernando/.nuget/packages/microsoft.extensions.primitives/8.0.0/microsoft.extensions.primitives.8.0.0.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/microsoft.openapi/2.4.1/microsoft.openapi.2.4.1.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/mono.texttemplating/2.2.1/mono.texttemplating.2.2.1.nupkg.sha512",
+    "/Users/prestonfernando/.nuget/packages/npgsql/8.0.6/npgsql.8.0.6.nupkg.sha512",
+    "/Users/prestonfernando/.nuget/packages/npgsql.entityframeworkcore.postgresql/8.0.11/npgsql.entityframeworkcore.postgresql.8.0.11.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/quartz/3.16.1/quartz.3.16.1.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/quartz.aspnetcore/3.16.1/quartz.aspnetcore.3.16.1.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/quartz.extensions.dependencyinjection/3.16.1/quartz.extensions.dependencyinjection.3.16.1.nupkg.sha512",
@@ -67,7 +69,10 @@
     "/Users/prestonfernando/.nuget/packages/system.runtime.compilerservices.unsafe/6.0.0/system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/system.text.encoding.codepages/6.0.0/system.text.encoding.codepages.6.0.0.nupkg.sha512",
     "/Users/prestonfernando/.nuget/packages/system.text.json/8.0.5/system.text.json.8.0.5.nupkg.sha512",
-    "/Users/prestonfernando/.nuget/packages/system.threading.channels/6.0.0/system.threading.channels.6.0.0.nupkg.sha512"
+    "/Users/prestonfernando/.nuget/packages/system.threading.channels/6.0.0/system.threading.channels.6.0.0.nupkg.sha512",
+    "/Users/prestonfernando/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.24/microsoft.aspnetcore.app.ref.8.0.24.nupkg.sha512",
+    "/Users/prestonfernando/.nuget/packages/microsoft.netcore.app.host.osx-arm64/8.0.24/microsoft.netcore.app.host.osx-arm64.8.0.24.nupkg.sha512",
+    "/Users/prestonfernando/.nuget/packages/microsoft.netcore.app.ref/8.0.24/microsoft.netcore.app.ref.8.0.24.nupkg.sha512"
   ],
   "logs": []
 }

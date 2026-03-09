@@ -2,48 +2,31 @@
 
 RaveRadar is a full-stack application for discovering and tracking music events, raves, and artists.
 
-## 🚀 Deployment Guide (Pain-Free)
+## 🚀 Deployment Guide (Simplified Docker)
 
-This project is designed to be deployed for free using **Render** (Backend) and **GitHub Pages** (Frontend).
+This project is dockerized to run both the **Backend** and **Frontend** in a single container. This is the easiest way to deploy to **Render**.
 
-### 1. Backend Deployment (Render)
+### 1. Render Deployment (Web Service)
 
-1. **Create a Render Account:** Go to [render.com](https://render.com).
-2. **New Web Service:** Connect your GitHub repository.
-3. **Configure:**
-   - **Runtime:** `Docker` (or `Web Service` if using .NET runtime).
-   - **Build Command:** `dotnet publish -c Release -o out`
-   - **Start Command:** `dotnet out/RaveRadar.Api.dll`
-   - **Disk (Recommended for Persistence):** To keep your SQLite database (`RaveRadar.db`) persistent across restarts:
-     - Add a **Render Disk** (e.g., 1GB, free tier).
-     - **Mount Path:** `/app/data`
-     - **Update Connection String:** Set `ConnectionStrings__DefaultConnection` to `Data Source=/app/data/RaveRadar.db`.
+1.  **Create a Render Account:** Go to [render.com](https://render.com).
+2.  **New Web Service:** Connect your GitHub repository.
+3.  **Configure:**
+    *   **Runtime:** `Docker`
+    *   **Region:** Choose the one closest to you.
+    *   **Instance Type:** Free (or any tier).
+4.  **Environment Variables:**
+    *   `Spotify__ClientId`: Your Client ID.
+    *   `Spotify__ClientSecret`: Your Client Secret.
+    *   `EdmTrain__ApiKey`: Your EDMTrain API Key.
+    *   `ASPNETCORE_ENVIRONMENT`: `Production`
+5.  **Persistent Disk (Crucial for SQLite):**
+    *   Go to the **Disk** tab in your Render service.
+    *   **Mount Path**: `/app/data`
+    *   **Size**: 1GB (Free).
+    *   *Note: This ensures your users and favorites aren't deleted when the server restarts.*
 
-4. **Environment Variables (Security First!):**
-   > ⚠️ **IMPORTANT:** Never commit secrets to your repository. Use Render's Environment Variables dashboard to keep them secure.
-
-   | Key | Description |
-   |---|---|
-   | `ASPNETCORE_ENVIRONMENT` | Set to `Production`. |
-   | `EdmTrain__ApiKey` | Your [EDMTrain API Key](https://edmtrain.com/api-documentation). |
-   | `Spotify__ClientId` | Your [Spotify Developer](https://developer.spotify.com/dashboard) Client ID. |
-   | `Spotify__ClientSecret` | Your Spotify Client Secret. |
-   | `SoundCloud__ClientId` | (Optional) Your SoundCloud Client ID. |
-   | `ConnectionStrings__DefaultConnection` | `Data Source=/app/data/RaveRadar.db` |
-
-### 2. OAuth & Callback Links
-
-If you enable features requiring Spotify user authentication (like "On Repeat" sync), you must configure your **Redirect URIs** in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard):
-
-- **Development:** `http://localhost:5057/auth/spotify/callback`
-- **Production:** `https://<your-render-app-url>.onrender.com/api/auth/spotify/callback`
-
-### 3. Frontend Deployment (GitHub Pages)
-
-1. **Update API Base URL:** In `RaveRadar.Client/src/services/api.ts`, change `baseURL` to your Render service URL (e.g., `https://raveradar-api.onrender.com/api`).
-2. **Install GH-Pages:** `cd RaveRadar.Client && npm install gh-pages --save-dev`
-3. **Update package.json:** Add `"homepage": "https://<your-username>.github.io/RaveRadar"` to `package.json`.
-4. **Deploy:** `npm run deploy` (Ensure you have a `deploy` script: `"deploy": "gh-pages -d dist"`).
+### 2. That's it!
+Render will build the Docker image (which compiles the React frontend and the .NET API) and serve them together at `https://your-app-name.onrender.com`.
 
 ---
 
