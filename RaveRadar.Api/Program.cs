@@ -6,13 +6,14 @@ using RaveRadar.Api.Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 1. SERVICES
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 
-// Database - Support SQLite (local) and PostgreSQL (Production/Render)
+// 2. DATABASE CONFIGURATION
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
@@ -20,6 +21,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(databaseUrl))
     {
+        Console.WriteLine("🌐 DATABASE_URL detected, configuring PostgreSQL...");
         options.UseNpgsql(ParseDatabaseUrl(databaseUrl));
     }
     else if (connectionString?.Contains("Host=") == true || connectionString?.Contains("Server=") == true)
@@ -28,54 +30,40 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     }
     else
     {
+        Console.WriteLine("📁 No DATABASE_URL found, using local SQLite.");
         options.UseSqlite(connectionString ?? "Data Source=RaveRadar.db");
     }
 });
 
-// Services
 builder.Services.AddScoped<EdmTrainService>();
 builder.Services.AddScoped<SpotifyService>();
 
-// CORS - Allow any origin for the public API demo
+// 3. CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
     });
 });
 
-// Quartz
+// 4. QUARTZ
 builder.Services.AddQuartz(q =>
 {
     var edmJobKey = new JobKey("EdmTrainSyncJob");
     q.AddJob<EdmTrainSyncJob>(opts => opts.WithIdentity(edmJobKey));
-    q.AddTrigger(opts => opts
-        .ForJob(edmJobKey)
-        .WithIdentity("EdmTrainSyncJob-trigger")
-        .WithSimpleSchedule(x => x.WithIntervalInHours(12).RepeatForever())
-    );
+    q.AddTrigger(opts => opts.ForJob(edmJobKey).WithSimpleSchedule(x => x.WithIntervalInHours(12).RepeatForever()));
 
     var spotifyJobKey = new JobKey("SpotifyEnrichJob");
     q.AddJob<SpotifyEnrichJob>(opts => opts.WithIdentity(spotifyJobKey));
-    q.AddTrigger(opts => opts
-        .ForJob(spotifyJobKey)
-        .WithIdentity("SpotifyEnrichJob-trigger")
-        .StartNow()
-        .WithSimpleSchedule(x => x.WithIntervalInHours(24).RepeatForever())
-    );
+    q.AddTrigger(opts => opts.ForJob(spotifyJobKey).StartNow().WithSimpleSchedule(x => x.WithIntervalInHours(24).RepeatForever()));
 });
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
-app.UseSwagger(options =>
-{
-    options.RouteTemplate = "api/swagger/{documentName}/swagger.json";
-});
-
+// 5. MIDDLEWARE
+app.UseSwagger(options => { options.RouteTemplate = "api/swagger/{documentName}/swagger.json"; });
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/api/swagger/v1/swagger.json", "RaveRadar API V1");
@@ -85,16 +73,16 @@ app.UseSwaggerUI(c =>
 app.UseRouting();
 app.UseCors("AllowAll");
 
-// Redirect from /api/swagger to the actual index page
-app.MapGet("/api/swagger", () => Results.Redirect("/api/swagger/index.html"));
-
+// Basic API info
 app.MapGet("/api", () => Results.Ok(new 
 { 
     app = "RaveRadar API", 
     status = "Healthy", 
-    swagger = "/swagger",
-    environment = app.Environment.EnvironmentName
+    swagger = "/api/swagger",
+    database = app.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>().Database.ProviderName 
 }));
+
+app.MapGet("/api/swagger", () => Results.Redirect("/api/swagger/index.html"));
 
 if (!app.Environment.IsProduction())
 {
@@ -109,46 +97,38 @@ app.MapGet("/health", () => Results.Ok(new { status = "Healthy", environment = a
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
+// 6. DB INITIALIZATION
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var dbType = context.Database.IsNpgsql() ? "PostgreSQL" : "SQLite";
-    Console.WriteLine($"🚀 Starting up on {app.Environment.EnvironmentName} environment...");
-    Console.WriteLine($"📦 Using Database: {dbType}");
-    
+    Console.WriteLine("🚀 Running migrations and seeding database...");
     try 
     {
-        Console.WriteLine("🔄 Running migrations...");
         context.Database.Migrate();
-        Console.WriteLine("🌱 Seeding database...");
         DbSeeder.Seed(context);
         Console.WriteLine("✅ Database initialized successfully.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ CRITICAL: Error during startup: {ex.Message}");
-        if (ex.InnerException != null) 
-            Console.WriteLine($"   Inner Exception: {ex.InnerException.Message}");
+        Console.WriteLine($"❌ CRITICAL ERROR: {ex.Message}");
+        if (ex.InnerException != null) Console.WriteLine($"   INNER: {ex.InnerException.Message}");
     }
 }
 
 app.Run();
-// Helper to parse DATABASE_URL (postgres://user:pass@host:port/db)
+
+// 7. HELPERS
 static string ParseDatabaseUrl(string url)
 {
     try 
     {
-        // Manual parsing to handle passwords with special characters like '@'
         var cleanUrl = url.Trim().Replace("postgresql://", "").Replace("postgres://", "");
-        
-        // The last '@' separates credentials from the host
         int lastAtIndex = cleanUrl.LastIndexOf('@');
         if (lastAtIndex == -1) return url;
 
         string credentials = cleanUrl.Substring(0, lastAtIndex);
         string hostPart = cleanUrl.Substring(lastAtIndex + 1);
 
-        // Split credentials (user:pass)
         string user = credentials;
         string password = "";
         int firstColonIndex = credentials.IndexOf(':');
@@ -158,7 +138,6 @@ static string ParseDatabaseUrl(string url)
             password = credentials.Substring(firstColonIndex + 1);
         }
 
-        // Split hostPart (host:port/database)
         string host = hostPart;
         string port = "5432";
         string database = "postgres";
@@ -185,4 +164,3 @@ static string ParseDatabaseUrl(string url)
         return url;
     }
 }
-
