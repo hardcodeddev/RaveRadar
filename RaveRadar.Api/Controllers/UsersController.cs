@@ -23,72 +23,99 @@ public class UsersController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto dto)
     {
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-            return BadRequest("User already exists");
-
-        var user = new User
+        try
         {
-            Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Location = dto.Location
-        };
+            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+                return BadRequest("User already exists");
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+            var user = new User
+            {
+                Email = dto.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                Location = dto.Location
+            };
 
-        return Ok(new { user.Id, user.Email, user.Location });
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            
+            Console.WriteLine($"✅ User registered: {user.Email}");
+            return Ok(new { user.Id, user.Email, user.Location });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Register Error: {ex.Message}");
+            if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto)
     {
-        var user = await _context.Users
-            .Include(u => u.FavoriteArtists)
-            .Include(u => u.FavoriteGenres)
-            .Include(u => u.SavedTracks)
-            .FirstOrDefaultAsync(u => u.Email == dto.Email);
+        try
+        {
+            var user = await _context.Users
+                .Include(u => u.FavoriteArtists)
+                .Include(u => u.FavoriteGenres)
+                .Include(u => u.SavedTracks)
+                .FirstOrDefaultAsync(u => u.Email == dto.Email);
 
-        if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            return Unauthorized("Invalid credentials");
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                return Unauthorized("Invalid credentials");
 
-        return Ok(MapUser(user));
+            Console.WriteLine($"✅ User logged in: {user.Email}");
+            return Ok(MapUser(user));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Login Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpPost("{userId}/preferences")]
     public async Task<IActionResult> UpdatePreferences(int userId, PreferencesDto dto)
     {
-        var user = await _context.Users
-            .Include(u => u.FavoriteArtists)
-            .Include(u => u.FavoriteGenres)
-            .Include(u => u.SavedTracks)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
-        if (user == null) return NotFound();
-
-        user.Location = dto.Location;
-
-        if (dto.ArtistIds != null)
+        try
         {
-            user.FavoriteArtists = await _context.Artists
-                .Where(a => dto.ArtistIds.Contains(a.Id))
-                .Take(10)
-                .ToListAsync();
-        }
+            var user = await _context.Users
+                .Include(u => u.FavoriteArtists)
+                .Include(u => u.FavoriteGenres)
+                .Include(u => u.SavedTracks)
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
-        if (dto.GenreIds != null)
+            if (user == null) return NotFound();
+
+            user.Location = dto.Location;
+
+            if (dto.ArtistIds != null)
+            {
+                user.FavoriteArtists = await _context.Artists
+                    .Where(a => dto.ArtistIds.Contains(a.Id))
+                    .Take(10)
+                    .ToListAsync();
+            }
+
+            if (dto.GenreIds != null)
+            {
+                user.FavoriteGenres = await _context.Genres
+                    .Where(g => dto.GenreIds.Contains(g.Id))
+                    .Take(10)
+                    .ToListAsync();
+            }
+
+            if (dto.FavoriteSongs != null)
+                user.FavoriteSongs = dto.FavoriteSongs.Take(20).ToList();
+
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"✅ Preferences updated for user {userId}");
+            return Ok(MapUser(user));
+        }
+        catch (Exception ex)
         {
-            user.FavoriteGenres = await _context.Genres
-                .Where(g => dto.GenreIds.Contains(g.Id))
-                .Take(10)
-                .ToListAsync();
+            Console.WriteLine($"❌ UpdatePreferences Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
         }
-
-        if (dto.FavoriteSongs != null)
-            user.FavoriteSongs = dto.FavoriteSongs.Take(20).ToList();
-
-        await _context.SaveChangesAsync();
-
-        return Ok(MapUser(user));
     }
 
     [HttpPost("{userId}/favorites/songs")]
@@ -145,45 +172,53 @@ public class UsersController : ControllerBase
     [HttpPost("{userId}/saved-tracks")]
     public async Task<IActionResult> SaveTrack(int userId, SaveTrackDto dto)
     {
-        var user = await _context.Users
-            .Include(u => u.SavedTracks)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
-        if (user == null) return NotFound();
-
-        // Avoid duplicates by spotifyTrackId or artist+song combo
-        var exists = user.SavedTracks.Any(t =>
-            (!string.IsNullOrEmpty(dto.SpotifyTrackId) && t.SpotifyTrackId == dto.SpotifyTrackId)
-            || (t.ArtistName == dto.ArtistName && t.SongName == dto.SongName));
-
-        if (exists)
-            return Ok(user.SavedTracks);
-
-        // Enrich with genres + vibes from Spotify
-        var genres = new List<string>();
-        if (_spotifyService.IsConfigured && !string.IsNullOrEmpty(dto.ArtistSpotifyId))
-            genres = await _spotifyService.GetArtistGenres(dto.ArtistSpotifyId);
-
-        var vibes = SpotifyService.DeriveVibes(genres);
-
-        var track = new SavedTrack
+        try
         {
-            SpotifyTrackId = dto.SpotifyTrackId,
-            SongName = dto.SongName,
-            ArtistName = dto.ArtistName,
-            ArtistSpotifyId = dto.ArtistSpotifyId,
-            ImageUrl = dto.ImageUrl,
-            PreviewUrl = dto.PreviewUrl,
-            ExternalUrl = dto.ExternalUrl,
-            Genres = genres,
-            Vibes = vibes,
-            UserId = userId
-        };
+            var user = await _context.Users
+                .Include(u => u.SavedTracks)
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
-        user.SavedTracks.Add(track);
-        await _context.SaveChangesAsync();
+            if (user == null) return NotFound();
 
-        return Ok(user.SavedTracks);
+            // Avoid duplicates by spotifyTrackId or artist+song combo
+            var exists = user.SavedTracks.Any(t =>
+                (!string.IsNullOrEmpty(dto.SpotifyTrackId) && t.SpotifyTrackId == dto.SpotifyTrackId)
+                || (t.ArtistName == dto.ArtistName && t.SongName == dto.SongName));
+
+            if (exists)
+                return Ok(user.SavedTracks);
+
+            // Enrich with genres + vibes from Spotify
+            var genres = new List<string>();
+            if (_spotifyService.IsConfigured && !string.IsNullOrEmpty(dto.ArtistSpotifyId))
+                genres = await _spotifyService.GetArtistGenres(dto.ArtistSpotifyId);
+
+            var vibes = SpotifyService.DeriveVibes(genres);
+
+            var track = new SavedTrack
+            {
+                SpotifyTrackId = dto.SpotifyTrackId,
+                SongName = dto.SongName,
+                ArtistName = dto.ArtistName,
+                ArtistSpotifyId = dto.ArtistSpotifyId,
+                ImageUrl = dto.ImageUrl,
+                PreviewUrl = dto.PreviewUrl,
+                ExternalUrl = dto.ExternalUrl,
+                Genres = genres,
+                Vibes = vibes,
+                UserId = userId
+            };
+
+            user.SavedTracks.Add(track);
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"✅ Track saved for user {userId}: {dto.SongName}");
+            return Ok(user.SavedTracks);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ SaveTrack Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{userId}/saved-tracks/{trackId}")]
@@ -207,150 +242,160 @@ public class UsersController : ControllerBase
     [HttpGet("{userId}/recommendations")]
     public async Task<IActionResult> GetRecommendations(int userId)
     {
-        var user = await _context.Users
-            .Include(u => u.FavoriteArtists)
-            .Include(u => u.FavoriteGenres)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
-        if (user == null) return NotFound();
-
-        var favoriteIds = user.FavoriteArtists.Select(a => a.Id).ToHashSet();
-        var recommendedArtists = new List<(Artist Artist, string Reason)>();
-
-        // --- Genre matching ---
-        var targetGenres = user.FavoriteArtists
-            .SelectMany(a => a.Genres)
-            .Concat(user.FavoriteGenres.Select(g => g.Name))
-            .Select(g => g.ToLower())
-            .Distinct()
-            .ToList();
-
-        var seedNames = user.FavoriteArtists.Select(a => a.Name).ToList();
-
-        var allPool = await _context.Artists
-            .Where(a => !favoriteIds.Contains(a.Id))
-            .ToListAsync();
-
-        if (targetGenres.Any())
+        try
         {
-            foreach (var artist in allPool.OrderByDescending(a => a.Popularity).Take(12))
+            var user = await _context.Users
+                .Include(u => u.FavoriteArtists)
+                .Include(u => u.FavoriteGenres)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null) return NotFound();
+
+            var favoriteIds = user.FavoriteArtists.Select(a => a.Id).ToHashSet();
+            var recommendedArtists = new List<(Artist Artist, string Reason)>();
+
+            // --- Genre matching ---
+            var targetGenres = user.FavoriteArtists
+                .SelectMany(a => a.Genres)
+                .Concat(user.FavoriteGenres.Select(g => g.Name))
+                .Select(g => g.ToLower())
+                .Distinct()
+                .ToList();
+
+            var seedNames = user.FavoriteArtists.Select(a => a.Name).ToList();
+
+            var allPool = await _context.Artists
+                .Where(a => !favoriteIds.Contains(a.Id))
+                .ToListAsync();
+
+            if (targetGenres.Any())
             {
-                var matchedGenre = artist.Genres
-                    .FirstOrDefault(g => targetGenres.Contains(g.ToLower()));
-                if (matchedGenre != null)
+                foreach (var artist in allPool.OrderByDescending(a => a.Popularity).Take(12))
                 {
-                    var seedForGenre = user.FavoriteArtists
-                        .FirstOrDefault(fa => fa.Genres.Any(g => g.ToLower() == matchedGenre.ToLower()));
-                    var reason = seedForGenre != null
-                        ? $"Fans of {seedForGenre.Name} also like this"
-                        : $"Matches your {matchedGenre} taste";
-                    recommendedArtists.Add((artist, reason));
+                    var matchedGenre = artist.Genres
+                        .FirstOrDefault(g => targetGenres.Contains(g.ToLower()));
+                    if (matchedGenre != null)
+                    {
+                        var seedForGenre = user.FavoriteArtists
+                            .FirstOrDefault(fa => fa.Genres.Any(g => g.ToLower() == matchedGenre.ToLower()));
+                        var reason = seedForGenre != null
+                            ? $"Fans of {seedForGenre.Name} also like this"
+                            : $"Matches your {matchedGenre} taste";
+                        recommendedArtists.Add((artist, reason));
+                        if (recommendedArtists.Count >= 12) break;
+                    }
+                }
+            }
+
+            // --- Pad with trending if not enough ---
+            if (recommendedArtists.Count < 4)
+            {
+                var excludeIds = recommendedArtists.Select(r => r.Artist.Id).Concat(favoriteIds).ToHashSet();
+                foreach (var artist in allPool.Where(a => !excludeIds.Contains(a.Id)).OrderByDescending(a => a.Popularity))
+                {
+                    recommendedArtists.Add((artist, "Trending in EDM"));
                     if (recommendedArtists.Count >= 12) break;
                 }
             }
-        }
 
-        // --- Pad with trending if not enough ---
-        if (recommendedArtists.Count < 4)
-        {
-            var excludeIds = recommendedArtists.Select(r => r.Artist.Id).Concat(favoriteIds).ToHashSet();
-            foreach (var artist in allPool.Where(a => !excludeIds.Contains(a.Id)).OrderByDescending(a => a.Popularity))
+            // --- Song recommendations: live Spotify searches per artist ---
+            var songSourceArtists = recommendedArtists.Take(6)
+                .Select(r => (r.Artist, r.Reason, IsFav: false))
+                .Concat(user.FavoriteArtists.Select(a => (a, $"By your favorite, {a.Name}", IsFav: true)))
+                .DistinctBy(r => r.Item1.Id)
+                .ToList();
+
+            List<object> songs;
+            if (_spotifyService.IsConfigured && songSourceArtists.Any())
             {
-                recommendedArtists.Add((artist, "Trending in EDM"));
-                if (recommendedArtists.Count >= 12) break;
-            }
-        }
-
-        // --- Song recommendations: live Spotify searches per artist ---
-        var songSourceArtists = recommendedArtists.Take(6)
-            .Select(r => (r.Artist, r.Reason, IsFav: false))
-            .Concat(user.FavoriteArtists.Select(a => (a, $"By your favorite, {a.Name}", IsFav: true)))
-            .DistinctBy(r => r.Item1.Id)
-            .ToList();
-
-        List<object> songs;
-        if (_spotifyService.IsConfigured && songSourceArtists.Any())
-        {
-            // Parallel Spotify searches: offset 0 and offset 10 for each artist
-            var searchTasks = songSourceArtists.Take(8).SelectMany(r => new[]
-            {
-                _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0)
-                    .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
-                _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 10)
-                    .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
-            }).ToList();
-
-            var batches = await Task.WhenAll(searchTasks);
-
-            // Resolve local artist IDs
-            var allArtistNames = songSourceArtists.Select(r => r.Item1.Name.ToLower()).Distinct().ToList();
-            var localByName = await _context.Artists
-                .Where(a => allArtistNames.Contains(a.Name.ToLower()))
-                .ToDictionaryAsync(a => a.Name.ToLower());
-
-            songs = batches
-                .SelectMany(b => b.Results.Select(track =>
+                // Parallel Spotify searches: offset 0 and offset 10 for each artist
+                var searchTasks = songSourceArtists.Take(8).SelectMany(r => new[]
                 {
-                    localByName.TryGetValue(track.ArtistName.ToLower(), out var local);
-                    return (object)new
-                    {
-                        track.ArtistId,
-                        track.ArtistName,
-                        track.SongName,
-                        track.ArtistSpotifyId,
-                        track.SpotifyTrackId,
-                        track.ImageUrl,
-                        track.PreviewUrl,
-                        track.ExternalUrl,
-                        Source = "Spotify",
-                        Reason = b.Reason
-                    };
-                }))
-                .Cast<dynamic>()
-                .GroupBy(s => (string)s.SpotifyTrackId ?? $"{(string)s.ArtistName}|{(string)s.SongName}")
-                .Select(g => g.First())
-                .Take(40)
-                .Cast<object>()
-                .ToList();
-        }
-        else
-        {
-            // Fallback to local TopTracks
-            var placeholders = new HashSet<string> { "Track 1", "Track 2", "Track 3" };
-            songs = songSourceArtists
-                .SelectMany(r => r.Item1.TopTracks
-                    .Where(t => !placeholders.Contains(t))
-                    .Select(t => (object)new
-                    {
-                        ArtistId = r.Item1.Id,
-                        ArtistName = r.Item1.Name,
-                        SongName = t,
-                        ArtistSpotifyId = (string?)null,
-                        SpotifyTrackId = (string?)null,
-                        ImageUrl = r.Item1.ImageUrl,
-                        PreviewUrl = (string?)null,
-                        ExternalUrl = (string?)null,
-                        Source = "local",
-                        Reason = r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2
-                    }))
-                .GroupBy(s => ((dynamic)s).SongName)
-                .Select(g => g.First())
-                .Take(24)
-                .ToList();
-        }
+                    _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0)
+                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
+                    _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 10)
+                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
+                }).ToList();
 
-        return Ok(new
-        {
-            Artists = recommendedArtists.Select(r => new
+                var batches = await Task.WhenAll(searchTasks);
+
+                // Resolve local artist IDs
+                var allArtistNames = songSourceArtists.Select(r => r.Item1.Name.ToLower()).Distinct().ToList();
+                var localByName = await _context.Artists
+                    .Where(a => allArtistNames.Contains(a.Name.ToLower()))
+                    .ToDictionaryAsync(a => a.Name.ToLower());
+
+                songs = batches
+                    .SelectMany(b => b.Results.Select(track =>
+                    {
+                        localByName.TryGetValue(track.ArtistName.ToLower(), out var local);
+                        return (object)new
+                        {
+                            ArtistId = local?.Id ?? 0,
+                            track.ArtistName,
+                            track.SongName,
+                            track.ArtistSpotifyId,
+                            track.SpotifyTrackId,
+                            track.ImageUrl,
+                            track.PreviewUrl,
+                            track.ExternalUrl,
+                            Source = "Spotify",
+                            Reason = b.Reason
+                        };
+                    }))
+                    .Cast<dynamic>()
+                    .GroupBy(s => (string)s.SpotifyTrackId ?? $"{(string)s.ArtistName}|{(string)s.SongName}")
+                    .Select(g => g.First())
+                    .Take(40)
+                    .Cast<object>()
+                    .ToList();
+            }
+            else
             {
-                r.Artist.Id, r.Artist.Name, r.Artist.ImageUrl,
-                Genres = r.Artist.Genres,
-                r.Artist.Popularity, r.Artist.Bio,
-                TopTracks = r.Artist.TopTracks,
-                Reason = r.Reason
-            }),
-            Songs = songs
-        });
+                // Fallback to local TopTracks
+                var placeholders = new HashSet<string> { "Track 1", "Track 2", "Track 3" };
+                songs = songSourceArtists
+                    .SelectMany(r => r.Item1.TopTracks
+                        .Where(t => !placeholders.Contains(t))
+                        .Select(t => (object)new
+                        {
+                            ArtistId = r.Item1.Id,
+                            ArtistName = r.Item1.Name,
+                            SongName = t,
+                            ArtistSpotifyId = (string?)null,
+                            SpotifyTrackId = (string?)null,
+                            ImageUrl = r.Item1.ImageUrl,
+                            PreviewUrl = (string?)null,
+                            ExternalUrl = (string?)null,
+                            Source = "local",
+                            Reason = r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2
+                        }))
+                    .GroupBy(s => ((dynamic)s).SongName)
+                    .Select(g => g.First())
+                    .Take(24)
+                    .ToList();
+            }
+
+            Console.WriteLine($"✅ Generated {recommendedArtists.Count} artist recs and {songs.Count} song recs for user {userId}");
+            return Ok(new
+            {
+                Artists = recommendedArtists.Select(r => new
+                {
+                    r.Artist.Id, r.Artist.Name, r.Artist.ImageUrl,
+                    Genres = r.Artist.Genres,
+                    r.Artist.Popularity, r.Artist.Bio,
+                    TopTracks = r.Artist.TopTracks,
+                    Reason = r.Reason
+                }),
+                Songs = songs
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetRecommendations Error: {ex.Message}");
+            if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     private static object MapUser(User user) => new

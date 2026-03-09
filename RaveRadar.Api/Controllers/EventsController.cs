@@ -19,72 +19,92 @@ public class EventsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Event>>> GetEvents([FromQuery] string? city, [FromQuery] int? userId, [FromQuery] bool allCities = false)
     {
-        var query = _context.Events.AsQueryable();
-
-        if (userId.HasValue)
+        try
         {
-            var user = await _context.Users
-                .Include(u => u.FavoriteArtists)
-                .Include(u => u.FavoriteGenres)
-                .FirstOrDefaultAsync(u => u.Id == userId.Value);
+            var query = _context.Events.AsQueryable();
 
-            if (user != null)
+            if (userId.HasValue)
             {
-                // Filter by city if the user has a location set and allCities is not requested
-                var eventsQuery = _context.Events.AsQueryable();
-                var effectiveCity = city ?? user.Location;
+                var user = await _context.Users
+                    .Include(u => u.FavoriteArtists)
+                    .Include(u => u.FavoriteGenres)
+                    .FirstOrDefaultAsync(u => u.Id == userId.Value);
 
-                if (!allCities && !string.IsNullOrEmpty(effectiveCity))
+                if (user != null)
                 {
-                    eventsQuery = eventsQuery.Where(e => e.City != null && e.City.ToLower() == effectiveCity.ToLower());
+                    // Filter by city if the user has a location set and allCities is not requested
+                    var eventsQuery = _context.Events.AsQueryable();
+                    var effectiveCity = city ?? user.Location;
+
+                    if (!allCities && !string.IsNullOrEmpty(effectiveCity))
+                    {
+                        eventsQuery = eventsQuery.Where(e => e.City != null && e.City.ToLower() == effectiveCity.ToLower());
+                    }
+
+                    var events = await eventsQuery.ToListAsync();
+
+                    // Score events based on preferences
+                    var scoredEvents = events.Select(e =>
+                    {
+                        var (score, reason) = ScoreWithReason(e, user);
+                        return new { Event = e, Score = score, Reason = reason };
+                    })
+                    .OrderByDescending(s => s.Score)
+                    .ThenBy(s => s.Event.Date)
+                    .Select(s => new
+                    {
+                        s.Event.Id, s.Event.Name, s.Event.Date, s.Event.Venue,
+                        s.Event.City, s.Event.TicketUrl, s.Event.ImageUrl,
+                        s.Event.Latitude, s.Event.Longitude,
+                        s.Event.ArtistNames, s.Event.GenreNames,
+                        s.Reason
+                    })
+                    .ToList();
+
+                    return Ok(scoredEvents);
                 }
-
-                var events = await eventsQuery.ToListAsync();
-
-                // Score events based on preferences
-                var scoredEvents = events.Select(e =>
-                {
-                    var (score, reason) = ScoreWithReason(e, user);
-                    return new { Event = e, Score = score, Reason = reason };
-                })
-                .OrderByDescending(s => s.Score)
-                .ThenBy(s => s.Event.Date)
-                .Select(s => new
-                {
-                    s.Event.Id, s.Event.Name, s.Event.Date, s.Event.Venue,
-                    s.Event.City, s.Event.TicketUrl, s.Event.ImageUrl,
-                    s.Event.Latitude, s.Event.Longitude,
-                    s.Event.ArtistNames, s.Event.GenreNames,
-                    s.Reason
-                })
-                .ToList();
-
-                return Ok(scoredEvents);
             }
-        }
 
-        if (!string.IsNullOrEmpty(city))
+            if (!string.IsNullOrEmpty(city))
+            {
+                query = query.Where(e => e.City != null && e.City.ToLower() == city.ToLower());
+            }
+
+            return await query.ToListAsync();
+        }
+        catch (Exception ex)
         {
-            query = query.Where(e => e.City != null && e.City.ToLower() == city.ToLower());
+            Console.WriteLine($"❌ GetEvents Error: {ex.Message}");
+            if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            return StatusCode(500, new { error = ex.Message });
         }
-
-        return await query.ToListAsync();
     }
 
     [HttpGet("cities")]
     public async Task<ActionResult<IEnumerable<string>>> GetCities([FromQuery] string? search)
     {
-        var query = _context.Events
-            .Where(e => e.City != null && e.City != "")
-            .Select(e => e.City!)
-            .Distinct();
-
-        if (!string.IsNullOrEmpty(search))
+        try
         {
-            query = query.Where(c => c.ToLower().Contains(search.ToLower()));
-        }
+            var query = _context.Events
+                .Where(e => e.City != null && e.City != "")
+                .Select(e => e.City!)
+                .Distinct();
 
-        return await query.OrderBy(c => c).Take(20).ToListAsync();
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(c => c.ToLower().Contains(search.ToLower()));
+            }
+
+            var results = await query.OrderBy(c => c).Take(20).ToListAsync();
+            Console.WriteLine($"🔍 GetCities search='{search}' found {results.Count} results.");
+            return results;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetCities Error: {ex.Message}");
+            if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     private static (int Score, string? Reason) ScoreWithReason(Event e, User user)

@@ -22,36 +22,62 @@ public class ArtistsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Artist>>> GetArtists([FromQuery] string? search, [FromQuery] string? genre)
     {
-        var query = _context.Artists.AsQueryable();
-
-        if (!string.IsNullOrEmpty(search))
-            query = query.Where(a => a.Name.ToLower().Contains(search.ToLower()));
-
-        if (!string.IsNullOrEmpty(genre))
+        try
         {
-            var g = genre.ToLower();
-            query = query.Where(a => a.Genres.Any(x => x.ToLower() == g));
-        }
+            var query = _context.Artists.AsQueryable();
 
-        return await query.ToListAsync();
+            if (!string.IsNullOrEmpty(search))
+                query = query.Where(a => a.Name.ToLower().Contains(search.ToLower()));
+
+            if (!string.IsNullOrEmpty(genre))
+            {
+                var g = genre.ToLower();
+                query = query.Where(a => a.Genres.Any(x => x.ToLower() == g));
+            }
+
+            var results = await query.ToListAsync();
+            Console.WriteLine($"🔍 GetArtists search='{search}' genre='{genre}' found {results.Count} results.");
+            return results;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetArtists Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpGet("top")]
     public async Task<ActionResult<IEnumerable<Artist>>> GetTopArtists([FromQuery] int count = 5)
     {
-        return await _context.Artists
-            .OrderByDescending(a => a.Popularity)
-            .Take(count)
-            .ToListAsync();
+        try
+        {
+            return await _context.Artists
+                .OrderByDescending(a => a.Popularity)
+                .Take(count)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetTopArtists Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpGet("genre/{genre}")]
     public async Task<ActionResult<IEnumerable<Artist>>> GetArtistsByGenre(string genre)
     {
-        var g = genre.ToLower();
-        return await _context.Artists
-            .Where(a => a.Genres.Any(x => x.ToLower() == g))
-            .ToListAsync();
+        try
+        {
+            var g = genre.ToLower();
+            return await _context.Artists
+                .Where(a => a.Genres.Any(x => x.ToLower() == g))
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetArtistsByGenre Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     [HttpGet("{id}")]
