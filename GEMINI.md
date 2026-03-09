@@ -19,13 +19,18 @@ This project is dockerized to run both the **Backend** and **Frontend** in a sin
     *   `Spotify__ClientSecret`: Your Client Secret.
     *   `EdmTrain__ApiKey`: Your EDMTrain API Key.
     *   `ASPNETCORE_ENVIRONMENT`: `Production`
-5.  **Persistent Disk (Crucial for SQLite):**
-    *   Go to the **Disk** tab in your Render service.
-    *   **Mount Path**: `/app/data`
-    *   **Size**: 1GB (Free).
-    *   *Note: This ensures your users and favorites aren't deleted when the server restarts.*
+    *   `DATABASE_URL`: (Recommended) Your Supabase or Neon PostgreSQL connection string.
 
-### 2. That's it!
+### 2. Permanent Free Database (Recommended)
+
+Since Render's free tier doesn't support persistent disks for SQLite, use a free external PostgreSQL database:
+
+1.  **Get a Database:** Sign up for [Supabase](https://supabase.com) or [Neon](https://neon.tech).
+2.  **Copy URL:** Copy your PostgreSQL connection string (it looks like `postgres://user:pass@host:5432/dbname`).
+3.  **Add to Render:** Add it as the `DATABASE_URL` environment variable in your Render dashboard.
+    *   *Note: The app will automatically detect this and switch from SQLite to PostgreSQL.*
+
+### 3. That's it!
 Render will build the Docker image (which compiles the React frontend and the .NET API) and serve them together at `https://your-app-name.onrender.com`.
 
 ---
