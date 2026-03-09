@@ -29,6 +29,11 @@ export const getEvents = async (city?: string, userId?: number, allCities?: bool
     if (allCities) params.allCities = true;
     return (await api.get<Event[]>('/Events', { params })).data;
 };
+export const getCities = async (search?: string) => {
+    const params: Record<string, any> = {};
+    if (search) params.search = search;
+    return (await api.get<string[]>('/Events/cities', { params })).data;
+};
 
 export const register = async (dto: RegisterDto) => (await api.post<Partial<User>>('/Users/register', dto)).data;
 export const login = async (dto: LoginDto) => (await api.post<User>('/Users/login', dto)).data;

@@ -71,6 +71,22 @@ public class EventsController : ControllerBase
         return await query.ToListAsync();
     }
 
+    [HttpGet("cities")]
+    public async Task<ActionResult<IEnumerable<string>>> GetCities([FromQuery] string? search)
+    {
+        var query = _context.Events
+            .Where(e => e.City != null && e.City != "")
+            .Select(e => e.City!)
+            .Distinct();
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            query = query.Where(c => c.ToLower().Contains(search.ToLower()));
+        }
+
+        return await query.OrderBy(c => c).Take(20).ToListAsync();
+    }
+
     private static (int Score, string? Reason) ScoreWithReason(Event e, User user)
     {
         int score = 0;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getArtists, updatePreferences, searchSongs, removeSavedTrack } from '../services/api';
+import { getArtists, updatePreferences, searchSongs, removeSavedTrack, getCities } from '../services/api';
 import { useAuth } from '../services/AuthContext';
 import type { Artist, SongResult } from '../services/models';
 
@@ -11,6 +11,14 @@ const PreferencesPage = () => {
     const [search, setSearch] = useState('');
     const [artists, setArtists] = useState<Artist[]>([]);
     const [location, setLocation] = useState(user?.location || '');
+    
+    // City search
+    const [cityQuery, setCityQuery] = useState(user?.location || '');
+    const [cityResults, setCityResults] = useState<string[]>([]);
+    const [showCityDropdown, setShowCityDropdown] = useState(false);
+    const cityWrapRef = useRef<HTMLDivElement>(null);
+    const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const [selectedArtistIds, setSelectedArtistIds] = useState<number[]>(
         user?.favoriteArtists.map(a => a.id) || []
     );
@@ -33,10 +41,37 @@ const PreferencesPage = () => {
             if (songWrapRef.current && !songWrapRef.current.contains(e.target as Node)) {
                 setShowDropdown(false);
             }
+            if (cityWrapRef.current && !cityWrapRef.current.contains(e.target as Node)) {
+                setShowCityDropdown(false);
+            }
         };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    const handleCityQueryChange = (value: string) => {
+        setCityQuery(value);
+        setLocation(value); // Keep location in sync if they just type
+        if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+        
+        if (value.trim().length < 1) { 
+            setCityResults([]); 
+            setShowCityDropdown(false); 
+            return; 
+        }
+
+        cityDebounceRef.current = setTimeout(async () => {
+            const results = await getCities(value.trim());
+            setCityResults(results);
+            setShowCityDropdown(results.length > 0);
+        }, 200);
+    };
+
+    const selectCity = (city: string) => {
+        setCityQuery(city);
+        setLocation(city);
+        setShowCityDropdown(false);
+    };
 
     const handleArtistSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -105,13 +140,32 @@ const PreferencesPage = () => {
             <section className="pref-section city-section">
                 <h2>Your City</h2>
                 <p className="pref-section-desc">Dashboard events filter to this city by default.</p>
-                <input
-                    type="text"
-                    className="pref-input"
-                    placeholder="e.g. Las Vegas, Miami, Los Angeles"
-                    value={location}
-                    onChange={e => setLocation(e.target.value)}
-                />
+                <div className="song-search-wrapper" ref={cityWrapRef}>
+                    <input
+                        type="text"
+                        className="pref-input"
+                        placeholder="Search for a city (e.g. Miami, Las Vegas)"
+                        value={cityQuery}
+                        onChange={e => handleCityQueryChange(e.target.value)}
+                        onFocus={() => cityResults.length > 0 && setShowCityDropdown(true)}
+                        autoComplete="off"
+                    />
+                    {showCityDropdown && (
+                        <div className="song-dropdown">
+                            {cityResults.map((city, i) => (
+                                <div
+                                    key={i}
+                                    className="song-dropdown-item"
+                                    onMouseDown={() => selectCity(city)}
+                                >
+                                    <div className="song-dropdown-info">
+                                        <span className="song-dropdown-title">{city}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <small>Toggle "Show all cities" on the dashboard anytime.</small>
             </section>
 
