@@ -1,0 +1,40 @@
+# Stage 1: Build the React frontend
+FROM node:22-alpine AS client-build
+WORKDIR /src/RaveRadar.Client
+COPY RaveRadar.Client/package*.json ./
+RUN npm install
+COPY RaveRadar.Client/ ./
+RUN npm run build
+
+# Stage 2: Build the ASP.NET Core backend
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS server-build
+WORKDIR /src
+COPY RaveRadar.sln .
+COPY RaveRadar.Api/*.csproj ./RaveRadar.Api/
+RUN dotnet restore
+COPY RaveRadar.Api/ ./RaveRadar.Api/
+# Copy the dataset file from the root to the API project directory so it's included
+COPY edm_artists_dataset.txt ./RaveRadar.Api/
+# Copy frontend build to backend's wwwroot so it can serve it
+COPY --from=client-build /src/RaveRadar.Client/dist/ ./RaveRadar.Api/wwwroot/
+RUN dotnet publish RaveRadar.Api/RaveRadar.Api.csproj -c Release -o /app/out
+
+# Stage 3: Final runtime image
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+COPY --from=server-build /app/out .
+
+# Ensure the data folder for SQLite exists and is writable
+# (important for Render persistent disk mounts)
+RUN mkdir -p /app/data && chmod 777 /app/data
+
+# Default environment variables
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/RaveRadar.db"
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Port exposure
+EXPOSE 8080
+
+# Command to run
+ENTRYPOINT ["dotnet", "RaveRadar.Api.dll"]

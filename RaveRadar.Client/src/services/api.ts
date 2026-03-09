@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { Artist, Genre, Event, User, RegisterDto, LoginDto, PreferencesDto, SongResult, RecommendationsResult, SavedTrack } from './models';
 
 const api = axios.create({
-    baseURL: 'http://localhost:5057/api',
+    baseURL: '/api',
 });
 
 export const getArtists = async (search?: string, genre?: string) => {

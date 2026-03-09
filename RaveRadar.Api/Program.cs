@@ -66,7 +66,11 @@ if (app.Environment.IsDevelopment())
 app.UseRouting();
 app.UseCors("AllowClient");
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 using (var scope = app.Services.CreateScope())
 {

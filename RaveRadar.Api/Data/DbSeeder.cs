@@ -124,7 +124,12 @@ public static class DbSeeder
         artistsFromFile.AddRange(featuredArtists);
 
         // 2. Load and parse the dataset file
-        var filePath = Path.Combine(Directory.GetCurrentDirectory(), "..", "edm_artists_dataset.txt");
+        var filePath = Path.Combine(Directory.GetCurrentDirectory(), "edm_artists_dataset.txt");
+        if (!File.Exists(filePath))
+        {
+            filePath = Path.Combine(Directory.GetCurrentDirectory(), "..", "edm_artists_dataset.txt");
+        }
+
         if (File.Exists(filePath))
         {
             var lines = File.ReadAllLines(filePath);
