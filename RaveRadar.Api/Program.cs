@@ -36,12 +36,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<EdmTrainService>();
 builder.Services.AddScoped<SpotifyService>();
 
-// CORS
+// CORS - Allow any origin for the public API demo
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowClient", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -83,7 +83,10 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseRouting();
-app.UseCors("AllowClient");
+app.UseCors("AllowAll");
+
+// Redirect from /api/swagger to the actual index page
+app.MapGet("/api/swagger", () => Results.Redirect("/api/swagger/index.html"));
 
 app.MapGet("/api", () => Results.Ok(new 
 { 
@@ -109,28 +112,49 @@ app.MapFallbackToFile("index.html");
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    Console.WriteLine("🚀 Running migrations and seeding database...");
+    var dbType = context.Database.IsNpgsql() ? "PostgreSQL" : "SQLite";
+    Console.WriteLine($"🚀 Starting up on {app.Environment.EnvironmentName} environment...");
+    Console.WriteLine($"📦 Using Database: {dbType}");
+    
     try 
     {
+        Console.WriteLine("🔄 Running migrations...");
         context.Database.Migrate();
+        Console.WriteLine("🌱 Seeding database...");
         DbSeeder.Seed(context);
         Console.WriteLine("✅ Database initialized successfully.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Error during startup: {ex.Message}");
+        Console.WriteLine($"❌ CRITICAL: Error during startup: {ex.Message}");
+        if (ex.InnerException != null) 
+            Console.WriteLine($"   Inner Exception: {ex.InnerException.Message}");
     }
 }
 
 app.Run();
-
 // Helper to parse DATABASE_URL (postgres://user:pass@host:port/db)
 static string ParseDatabaseUrl(string url)
 {
-    var cleanUrl = url.Replace("postgresql://", "postgres://");
-    var uri = new Uri(cleanUrl);
-    var userInfo = uri.UserInfo.Split(':');
-    var user = userInfo[0];
-    var password = userInfo.Length > 1 ? userInfo[1] : "";
-    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.Trim('/')};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
+    try 
+    {
+        // Handle postgresql:// and ensure URI format
+        var cleanUrl = url.Trim().Replace("postgresql://", "postgres://");
+        if (!cleanUrl.StartsWith("postgres://")) cleanUrl = "postgres://" + cleanUrl;
+
+        var uri = new Uri(cleanUrl);
+        var userInfo = uri.UserInfo.Split(':');
+        var user = userInfo[0];
+        var password = userInfo.Length > 1 ? userInfo[1] : "";
+        var database = uri.AbsolutePath.Trim('/');
+
+        // Return Npgsql formatted connection string
+        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
+        return url; // Fallback to raw string if parsing fails
+    }
 }
+
