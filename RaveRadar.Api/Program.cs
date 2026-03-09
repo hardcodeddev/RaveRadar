@@ -20,7 +20,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(databaseUrl))
     {
-        // Parse DATABASE_URL if provided (common in free tier providers like Supabase/Neon)
         options.UseNpgsql(ParseDatabaseUrl(databaseUrl));
     }
     else if (connectionString?.Contains("Host=") == true || connectionString?.Contains("Server=") == true)
@@ -34,18 +33,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 // Services
-...
-}
-
-app.Run();
-
-// Helper to parse DATABASE_URL (postgres://user:pass@host:port/db)
-static string ParseDatabaseUrl(string url)
-{
-    var uri = new Uri(url);
-    var userInfo = uri.UserInfo.Split(':');
-    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.Trim('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
-}
 builder.Services.AddScoped<EdmTrainService>();
 builder.Services.AddScoped<SpotifyService>();
 
@@ -63,7 +50,6 @@ builder.Services.AddCors(options =>
 // Quartz
 builder.Services.AddQuartz(q =>
 {
-    // EDM Train sync — every 12 hours
     var edmJobKey = new JobKey("EdmTrainSyncJob");
     q.AddJob<EdmTrainSyncJob>(opts => opts.WithIdentity(edmJobKey));
     q.AddTrigger(opts => opts
@@ -72,7 +58,6 @@ builder.Services.AddQuartz(q =>
         .WithSimpleSchedule(x => x.WithIntervalInHours(12).RepeatForever())
     );
 
-    // Spotify enrichment — runs on startup then every 24 hours
     var spotifyJobKey = new JobKey("SpotifyEnrichJob");
     q.AddJob<SpotifyEnrichJob>(opts => opts.WithIdentity(spotifyJobKey));
     q.AddTrigger(opts => opts
@@ -86,22 +71,20 @@ builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true)
 
 var app = builder.Build();
 
-// Enable Swagger in all environments for debugging
 app.UseSwagger(options =>
 {
-    options.RouteTemplate = "swagger/{documentName}/swagger.json";
+    options.RouteTemplate = "api/swagger/{documentName}/swagger.json";
 });
 
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "RaveRadar API V1");
-    c.RoutePrefix = "swagger"; // reach it at /swagger
+    c.SwaggerEndpoint("/api/swagger/v1/swagger.json", "RaveRadar API V1");
+    c.RoutePrefix = "api/swagger";
 });
 
 app.UseRouting();
 app.UseCors("AllowClient");
 
-// Basic API info/health endpoint
 app.MapGet("/api", () => Results.Ok(new 
 { 
     app = "RaveRadar API", 
@@ -110,7 +93,6 @@ app.MapGet("/api", () => Results.Ok(new
     environment = app.Environment.EnvironmentName
 }));
 
-// In Docker/Render, SSL is handled at the load balancer
 if (!app.Environment.IsProduction())
 {
     app.UseHttpsRedirection();
@@ -119,7 +101,6 @@ if (!app.Environment.IsProduction())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// Health Check
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", environment = app.Environment.EnvironmentName }));
 
 app.MapControllers();
@@ -142,3 +123,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+// Helper to parse DATABASE_URL (postgres://user:pass@host:port/db)
+static string ParseDatabaseUrl(string url)
+{
+    var cleanUrl = url.Replace("postgresql://", "postgres://");
+    var uri = new Uri(cleanUrl);
+    var userInfo = uri.UserInfo.Split(':');
+    var user = userInfo[0];
+    var password = userInfo.Length > 1 ? userInfo[1] : "";
+    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.Trim('/')};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
+}
