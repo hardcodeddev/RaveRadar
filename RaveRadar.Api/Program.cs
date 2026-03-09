@@ -138,23 +138,51 @@ static string ParseDatabaseUrl(string url)
 {
     try 
     {
-        // Handle postgresql:// and ensure URI format
-        var cleanUrl = url.Trim().Replace("postgresql://", "postgres://");
-        if (!cleanUrl.StartsWith("postgres://")) cleanUrl = "postgres://" + cleanUrl;
+        // Manual parsing to handle passwords with special characters like '@'
+        var cleanUrl = url.Trim().Replace("postgresql://", "").Replace("postgres://", "");
+        
+        // The last '@' separates credentials from the host
+        int lastAtIndex = cleanUrl.LastIndexOf('@');
+        if (lastAtIndex == -1) return url;
 
-        var uri = new Uri(cleanUrl);
-        var userInfo = uri.UserInfo.Split(':');
-        var user = userInfo[0];
-        var password = userInfo.Length > 1 ? userInfo[1] : "";
-        var database = uri.AbsolutePath.Trim('/');
+        string credentials = cleanUrl.Substring(0, lastAtIndex);
+        string hostPart = cleanUrl.Substring(lastAtIndex + 1);
 
-        // Return Npgsql formatted connection string
-        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
+        // Split credentials (user:pass)
+        string user = credentials;
+        string password = "";
+        int firstColonIndex = credentials.IndexOf(':');
+        if (firstColonIndex != -1)
+        {
+            user = credentials.Substring(0, firstColonIndex);
+            password = credentials.Substring(firstColonIndex + 1);
+        }
+
+        // Split hostPart (host:port/database)
+        string host = hostPart;
+        string port = "5432";
+        string database = "postgres";
+
+        int slashIndex = hostPart.IndexOf('/');
+        if (slashIndex != -1)
+        {
+            database = hostPart.Substring(slashIndex + 1);
+            host = hostPart.Substring(0, slashIndex);
+        }
+
+        int portColonIndex = host.IndexOf(':');
+        if (portColonIndex != -1)
+        {
+            port = host.Substring(portColonIndex + 1);
+            host = host.Substring(0, portColonIndex);
+        }
+
+        return $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
     }
     catch (Exception ex)
     {
         Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
-        return url; // Fallback to raw string if parsing fails
+        return url;
     }
 }
 
