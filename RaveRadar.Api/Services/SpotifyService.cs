@@ -140,37 +140,62 @@ public class SpotifyService
         }
 
         var results = new List<SongResult>();
-        foreach (var track in doc.RootElement.GetProperty("tracks").GetProperty("items").EnumerateArray())
+        try
         {
-            var firstArtist = track.GetProperty("artists")[0];
-            var artistName = firstArtist.GetProperty("name").GetString()!;
-            var artistSpotifyId = firstArtist.GetProperty("id").GetString();
-            var songName = track.GetProperty("name").GetString()!;
-            var images = track.GetProperty("album").GetProperty("images");
-            var imageUrl = images.GetArrayLength() > 0
-                ? images[images.GetArrayLength() - 1].GetProperty("url").GetString()
-                : null;
-
-            string? previewUrl = null;
-            if (track.TryGetProperty("preview_url", out var pv) && pv.ValueKind != JsonValueKind.Null)
-                previewUrl = pv.GetString();
-
-            string? spotifyTrackId = null;
-            if (track.TryGetProperty("id", out var tid) && tid.ValueKind != JsonValueKind.Null)
-                spotifyTrackId = tid.GetString();
-
-            results.Add(new SongResult
+            var tracks = doc.RootElement.GetProperty("tracks").GetProperty("items");
+            foreach (var track in tracks.EnumerateArray())
             {
-                ArtistId = 0, // resolved later by controller
-                ArtistName = artistName,
-                ArtistSpotifyId = artistSpotifyId,
-                SpotifyTrackId = spotifyTrackId,
-                SongName = songName,
-                ImageUrl = imageUrl,
-                PreviewUrl = previewUrl,
-                ExternalUrl = track.GetProperty("external_urls").GetProperty("spotify").GetString(),
-                Source = "Spotify"
-            });
+                try
+                {
+                    if (!track.TryGetProperty("artists", out var artistsEl) || artistsEl.GetArrayLength() == 0)
+                        continue;
+
+                    var firstArtist = artistsEl[0];
+                    var artistName = firstArtist.GetProperty("name").GetString() ?? "Unknown Artist";
+                    var artistSpotifyId = firstArtist.TryGetProperty("id", out var aid) ? aid.GetString() : null;
+                    var songName = track.TryGetProperty("name", out var sn) ? sn.GetString() ?? "Unknown Song" : "Unknown Song";
+                    
+                    string? imageUrl = null;
+                    if (track.TryGetProperty("album", out var album) && album.TryGetProperty("images", out var images))
+                    {
+                        if (images.GetArrayLength() > 0)
+                            imageUrl = images[images.GetArrayLength() - 1].GetProperty("url").GetString();
+                    }
+
+                    string? previewUrl = null;
+                    if (track.TryGetProperty("preview_url", out var pv) && pv.ValueKind != JsonValueKind.Null)
+                        previewUrl = pv.GetString();
+
+                    string? spotifyTrackId = null;
+                    if (track.TryGetProperty("id", out var tid) && tid.ValueKind != JsonValueKind.Null)
+                        spotifyTrackId = tid.GetString();
+
+                    string? externalUrl = null;
+                    if (track.TryGetProperty("external_urls", out var exUrls) && exUrls.TryGetProperty("spotify", out var sUrl))
+                        externalUrl = sUrl.GetString();
+
+                    results.Add(new SongResult
+                    {
+                        ArtistId = 0, // resolved later by controller
+                        ArtistName = artistName,
+                        ArtistSpotifyId = artistSpotifyId,
+                        SpotifyTrackId = spotifyTrackId,
+                        SongName = songName,
+                        ImageUrl = imageUrl,
+                        PreviewUrl = previewUrl,
+                        ExternalUrl = externalUrl,
+                        Source = "Spotify"
+                    });
+                }
+                catch (Exception itemEx)
+                {
+                    _logger.LogWarning(itemEx, "Error parsing individual Spotify track item");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing Spotify tracks response");
         }
 
         return results;
