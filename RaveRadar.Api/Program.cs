@@ -187,6 +187,28 @@ static string ParseDatabaseUrl(string url)
             host = host.Substring(0, portColonIndex);
         }
 
+        // Render containers don't support IPv6. Resolve the hostname to its IPv4 address
+        // at startup so Npgsql never attempts an IPv6 connection.
+        try
+        {
+            var addresses = System.Net.Dns.GetHostAddresses(host);
+            var ipv4 = addresses.FirstOrDefault(a =>
+                a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+            if (ipv4 != null)
+            {
+                Console.WriteLine($"🔍 Resolved {host} → {ipv4} (IPv4)");
+                host = ipv4.ToString();
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ No IPv4 address found for {host}, using hostname as-is");
+            }
+        }
+        catch (Exception dnsEx)
+        {
+            Console.WriteLine($"⚠️ DNS resolution failed for {host}: {dnsEx.Message} (using hostname)");
+        }
+
         // Port 6543 = Supabase transaction pooler (PgBouncer). It doesn't support prepared
         // statements, so disable Npgsql's own pool and tell it not to reset on close.
         var pgBouncer = port == "6543" ? ";No Reset On Close=true;Pooling=false" : "";
