@@ -76,7 +76,7 @@ public class EventsController : ControllerBase
         {
             Console.WriteLine($"❌ GetEvents Error: {ex.Message}");
             if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -103,7 +103,7 @@ public class EventsController : ControllerBase
         {
             Console.WriteLine($"❌ GetCities Error: {ex.Message}");
             if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 

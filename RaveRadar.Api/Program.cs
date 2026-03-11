@@ -74,13 +74,39 @@ app.UseRouting();
 app.UseCors("AllowAll");
 
 // Basic API info
-app.MapGet("/api", () => Results.Ok(new 
-{ 
-    app = "RaveRadar API", 
-    status = "Healthy", 
+app.MapGet("/api", () => Results.Ok(new
+{
+    app = "RaveRadar API",
+    status = "Healthy",
     swagger = "/api/swagger",
-    database = app.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>().Database.ProviderName 
+    database = app.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>().Database.ProviderName
 }));
+
+// Debug endpoint — shows real DB error so we can diagnose connection issues
+app.MapGet("/api/debug", async (AppDbContext db) =>
+{
+    var connStr = db.Database.GetConnectionString() ?? "";
+    var safeConn = string.Join(";", connStr.Split(';')
+        .Select(p => p.TrimStart())
+        .Where(p => !p.StartsWith("Password", StringComparison.OrdinalIgnoreCase)));
+    try
+    {
+        await db.Database.OpenConnectionAsync();
+        var artistCount = await db.Artists.CountAsync();
+        var genreCount  = await db.Genres.CountAsync();
+        return Results.Ok(new { connection = safeConn, artistCount, genreCount, status = "OK" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new
+        {
+            connection = safeConn,
+            error  = ex.Message,
+            inner  = ex.InnerException?.Message,
+            inner2 = ex.InnerException?.InnerException?.Message
+        });
+    }
+});
 
 app.MapGet("/api/swagger", () => Results.Redirect("/api/swagger/index.html"));
 
@@ -149,6 +175,11 @@ static string ParseDatabaseUrl(string url)
             host = hostPart.Substring(0, slashIndex);
         }
 
+        // Strip query parameters (e.g. ?pgbouncer=true, ?sslmode=require) from database name
+        int queryIndex = database.IndexOf('?');
+        if (queryIndex != -1)
+            database = database.Substring(0, queryIndex);
+
         int portColonIndex = host.IndexOf(':');
         if (portColonIndex != -1)
         {
@@ -156,7 +187,11 @@ static string ParseDatabaseUrl(string url)
             host = host.Substring(0, portColonIndex);
         }
 
-        return $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true";
+        // Port 6543 = Supabase transaction pooler (PgBouncer). It doesn't support prepared
+        // statements, so disable Npgsql's own pool and tell it not to reset on close.
+        var pgBouncer = port == "6543" ? ";No Reset On Close=true;Pooling=false" : "";
+
+        return $"Host={host};Port={port};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true;Include Error Detail=true{pgBouncer}";
     }
     catch (Exception ex)
     {

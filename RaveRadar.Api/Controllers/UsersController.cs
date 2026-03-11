@@ -45,7 +45,7 @@ public class UsersController : ControllerBase
         {
             Console.WriteLine($"❌ Register Error: {ex.Message}");
             if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -69,7 +69,7 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Login Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -114,7 +114,7 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ UpdatePreferences Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -217,7 +217,7 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ SaveTrack Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -394,7 +394,7 @@ public class UsersController : ControllerBase
         {
             Console.WriteLine($"❌ GetRecommendations Error: {ex.Message}");
             if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 

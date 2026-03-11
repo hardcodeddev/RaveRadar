@@ -42,7 +42,7 @@ public class ArtistsController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ GetArtists Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -59,7 +59,7 @@ public class ArtistsController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ GetTopArtists Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -76,7 +76,7 @@ public class ArtistsController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"❌ GetArtistsByGenre Error: {ex.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 
@@ -169,7 +169,7 @@ public class ArtistsController : ControllerBase
         {
             Console.WriteLine($"❌ SearchSongs Error: {ex.Message}");
             if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
         }
     }
 }

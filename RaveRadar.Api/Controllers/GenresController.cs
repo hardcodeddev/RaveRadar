@@ -19,13 +19,20 @@ public class GenresController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Genre>>> GetGenres([FromQuery] string? search)
     {
-        var query = _context.Genres.AsQueryable();
-
-        if (!string.IsNullOrEmpty(search))
+        try
         {
-            query = query.Where(g => g.Name.ToLower().Contains(search.ToLower()));
-        }
+            var query = _context.Genres.AsQueryable();
 
-        return await query.ToListAsync();
+            if (!string.IsNullOrEmpty(search))
+                query = query.Where(g => g.Name.ToLower().Contains(search.ToLower()));
+
+            return await query.ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GetGenres Error: {ex.Message}");
+            if (ex.InnerException != null) Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+        }
     }
 }
