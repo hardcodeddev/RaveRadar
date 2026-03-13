@@ -38,7 +38,9 @@ public class EventsController : ControllerBase
 
                     if (!allCities && !string.IsNullOrEmpty(effectiveCity))
                     {
-                        eventsQuery = eventsQuery.Where(e => e.City != null && e.City.ToLower() == effectiveCity.ToLower());
+                        var cityLower = effectiveCity.ToLower();
+                        eventsQuery = eventsQuery.Where(e => e.City != null &&
+                            (e.City.ToLower() == cityLower || e.City.ToLower().Contains(cityLower)));
                     }
 
                     var events = await eventsQuery.ToListAsync();
@@ -67,7 +69,9 @@ public class EventsController : ControllerBase
 
             if (!string.IsNullOrEmpty(city))
             {
-                query = query.Where(e => e.City != null && e.City.ToLower() == city.ToLower());
+                var cityLower = city.ToLower();
+                query = query.Where(e => e.City != null &&
+                    (e.City.ToLower() == cityLower || e.City.ToLower().Contains(cityLower)));
             }
 
             return await query.ToListAsync();
