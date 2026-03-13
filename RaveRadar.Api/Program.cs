@@ -148,7 +148,7 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     Console.WriteLine("🚀 Running migrations and seeding database...");
-    try 
+    try
     {
         context.Database.Migrate();
         DbSeeder.Seed(context);
@@ -159,6 +159,22 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine($"❌ CRITICAL ERROR: {ex.Message}");
         if (ex.InnerException != null) Console.WriteLine($"   INNER: {ex.InnerException.Message}");
     }
+
+    // Sync EdmTrain events on startup (runs in background so app starts immediately)
+    var edmService = scope.ServiceProvider.GetRequiredService<EdmTrainService>();
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            Console.WriteLine("🎵 Starting EdmTrain sync on startup...");
+            await edmService.SyncEvents();
+            Console.WriteLine("✅ EdmTrain startup sync complete.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ EdmTrain startup sync failed: {ex.Message}");
+        }
+    });
 }
 
 app.Run();

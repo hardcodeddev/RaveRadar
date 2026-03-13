@@ -20,6 +20,26 @@ public class UsersController : ControllerBase
         _spotifyService = spotifyService;
     }
 
+    [HttpGet("{userId}")]
+    public async Task<IActionResult> GetUser(int userId)
+    {
+        try
+        {
+            var user = await _context.Users
+                .Include(u => u.FavoriteArtists)
+                .Include(u => u.FavoriteGenres)
+                .Include(u => u.SavedTracks)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null) return NotFound();
+            return Ok(MapUser(user));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+        }
+    }
+
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto dto)
     {

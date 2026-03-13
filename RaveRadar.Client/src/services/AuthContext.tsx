@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 import type { User } from '../services/models';
+
+const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api';
 
 interface AuthContextType {
     user: User | null;
@@ -17,10 +20,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         const storedUser = localStorage.getItem('raveradar_user');
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-        setLoading(false);
+        if (!storedUser) { setLoading(false); return; }
+
+        const parsed: User = JSON.parse(storedUser);
+        // Validate the session is still valid (DB may have been wiped on redeploy)
+        axios.get(`${apiBase}/Users/${parsed.id}`)
+            .then(res => {
+                setUser(res.data);
+                localStorage.setItem('raveradar_user', JSON.stringify(res.data));
+            })
+            .catch(() => {
+                // User no longer exists — clear stale session silently
+                localStorage.removeItem('raveradar_user');
+                setUser(null);
+            })
+            .finally(() => setLoading(false));
     }, []);
 
     const login = (userData: User) => {
