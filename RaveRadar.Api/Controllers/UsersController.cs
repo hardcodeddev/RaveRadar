@@ -90,18 +90,22 @@ public class UsersController : ControllerBase
 
             if (dto.ArtistIds != null)
             {
-                user.FavoriteArtists = await _context.Artists
+                user.FavoriteArtists.Clear();
+                var newArtists = await _context.Artists
                     .Where(a => dto.ArtistIds.Contains(a.Id))
                     .Take(10)
                     .ToListAsync();
+                foreach (var a in newArtists) user.FavoriteArtists.Add(a);
             }
 
             if (dto.GenreIds != null)
             {
-                user.FavoriteGenres = await _context.Genres
+                user.FavoriteGenres.Clear();
+                var newGenres = await _context.Genres
                     .Where(g => dto.GenreIds.Contains(g.Id))
                     .Take(10)
                     .ToListAsync();
+                foreach (var g in newGenres) user.FavoriteGenres.Add(g);
             }
 
             if (dto.FavoriteSongs != null)

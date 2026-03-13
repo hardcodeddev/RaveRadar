@@ -122,8 +122,9 @@ const PreferencesPage = () => {
             });
             login(updated);
             navigate('/');
-        } catch {
-            alert('Something went wrong saving your preferences.');
+        } catch (err: any) {
+            const msg = err?.response?.data?.error || err?.response?.data?.detail || err?.message || 'Unknown error';
+            alert(`Failed to save preferences: ${msg}`);
         } finally {
             setSaving(false);
         }
