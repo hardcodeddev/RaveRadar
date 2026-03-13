@@ -52,7 +52,7 @@ builder.Services.AddQuartz(q =>
 {
     var edmJobKey = new JobKey("EdmTrainSyncJob");
     q.AddJob<EdmTrainSyncJob>(opts => opts.WithIdentity(edmJobKey));
-    q.AddTrigger(opts => opts.ForJob(edmJobKey).WithSimpleSchedule(x => x.WithIntervalInHours(12).RepeatForever()));
+    q.AddTrigger(opts => opts.ForJob(edmJobKey).StartNow().WithSimpleSchedule(x => x.WithIntervalInHours(12).RepeatForever()));
 
     var spotifyJobKey = new JobKey("SpotifyEnrichJob");
     q.AddJob<SpotifyEnrichJob>(opts => opts.WithIdentity(spotifyJobKey));
@@ -106,6 +106,26 @@ app.MapGet("/api/debug", async (AppDbContext db) =>
             inner2 = ex.InnerException?.InnerException?.Message
         });
     }
+});
+
+// Manual EdmTrain sync trigger — hit this to force a sync and confirm events are stored
+app.MapGet("/api/sync/edm", async (EdmTrainService edmService, AppDbContext db) =>
+{
+    var apiKey = app.Configuration["EdmTrain:ApiKey"];
+    if (string.IsNullOrEmpty(apiKey) || apiKey == "YOUR_EDMTRAIN_API_KEY")
+        return Results.Ok(new { error = "EdmTrain:ApiKey is not configured on this server." });
+
+    var beforeCount = await db.Events.CountAsync();
+    await edmService.SyncEvents();
+    var afterCount = await db.Events.CountAsync();
+
+    var sample = await db.Events
+        .OrderByDescending(e => e.Date)
+        .Take(5)
+        .Select(e => new { e.Id, e.Name, e.City, e.Date })
+        .ToListAsync();
+
+    return Results.Ok(new { beforeCount, afterCount, newEvents = afterCount - beforeCount, sample });
 });
 
 app.MapGet("/api/swagger", () => Results.Redirect("/api/swagger/index.html"));
