@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using RaveRadar.Api.Data;
 using RaveRadar.Api.Models;
 using RaveRadar.Api.Services;
@@ -13,11 +14,13 @@ public class UsersController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly SpotifyService _spotifyService;
+    private readonly IMemoryCache _cache;
 
-    public UsersController(AppDbContext context, SpotifyService spotifyService)
+    public UsersController(AppDbContext context, SpotifyService spotifyService, IMemoryCache cache)
     {
         _context = context;
         _spotifyService = spotifyService;
+        _cache = cache;
     }
 
     [HttpGet("{userId}")]
@@ -266,6 +269,11 @@ public class UsersController : ControllerBase
     [HttpGet("{userId}/recommendations")]
     public async Task<IActionResult> GetRecommendations(int userId)
     {
+        // Cache per user for 30 min — prevents re-firing 16 Spotify calls on every page visit
+        var cacheKey = $"recs:{userId}";
+        if (_cache.TryGetValue(cacheKey, out var cached))
+            return Ok(cached);
+
         try
         {
             var user = await _context.Users
@@ -332,14 +340,11 @@ public class UsersController : ControllerBase
             List<object> songs;
             if (_spotifyService.IsConfigured && songSourceArtists.Any())
             {
-                // Parallel Spotify searches: offset 0 and offset 10 for each artist
-                var searchTasks = songSourceArtists.Take(8).SelectMany(r => new[]
-                {
+                // One search per artist (offset 0 only) — halves Spotify calls vs. the previous 2-offset approach
+                var searchTasks = songSourceArtists.Take(6).Select(r =>
                     _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0)
-                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
-                    _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 10)
-                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2)),
-                }).ToList();
+                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2))
+                ).ToList();
 
                 var batches = await Task.WhenAll(searchTasks);
 
@@ -401,7 +406,7 @@ public class UsersController : ControllerBase
             }
 
             Console.WriteLine($"✅ Generated {recommendedArtists.Count} artist recs and {songs.Count} song recs for user {userId}");
-            return Ok(new
+            var result = new
             {
                 Artists = recommendedArtists.Select(r => new
                 {
@@ -412,7 +417,9 @@ public class UsersController : ControllerBase
                     Reason = r.Reason
                 }),
                 Songs = songs
-            });
+            };
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(30));
+            return Ok(result);
         }
         catch (Exception ex)
         {
