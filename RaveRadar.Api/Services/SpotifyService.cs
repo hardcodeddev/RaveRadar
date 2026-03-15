@@ -29,17 +29,28 @@ public class SpotifyService
         _logger = logger;
     }
 
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(_config["Spotify:ClientId"]) &&
-        !string.IsNullOrWhiteSpace(_config["Spotify:ClientSecret"]);
+    // Resolve credentials from ASP.NET Core config (Spotify__ClientId / Spotify__ClientSecret)
+    // OR from plain env vars (SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET) for Render compatibility.
+    private string? ClientId =>
+        NullIfPlaceholder(_config["Spotify:ClientId"])
+        ?? NullIfPlaceholder(Environment.GetEnvironmentVariable("SPOTIFY_CLIENT_ID"));
+
+    private string? ClientSecret =>
+        NullIfPlaceholder(_config["Spotify:ClientSecret"])
+        ?? NullIfPlaceholder(Environment.GetEnvironmentVariable("SPOTIFY_CLIENT_SECRET"));
+
+    private static string? NullIfPlaceholder(string? value) =>
+        string.IsNullOrWhiteSpace(value) || value.StartsWith("YOUR_") ? null : value;
+
+    public bool IsConfigured => ClientId != null && ClientSecret != null;
 
     private async Task<string?> GetAccessToken()
     {
         if (_cache.TryGetValue<string>(TokenCacheKey, out var cached))
             return cached;
 
-        var clientId = _config["Spotify:ClientId"]!;
-        var clientSecret = _config["Spotify:ClientSecret"]!;
+        var clientId = ClientId!;
+        var clientSecret = ClientSecret!;
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
 
         var client = _httpClientFactory.CreateClient();

@@ -167,7 +167,7 @@ public class ArtistsController : ControllerBase
         }
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<Artist>> GetArtist(int id)
     {
         var artist = await _context.Artists.FindAsync(id);
@@ -183,13 +183,12 @@ public class ArtistsController : ControllerBase
             if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
                 return new List<SongResult>();
 
-            // --- Live Spotify search: 3 parallel queries for breadth ---
+            // --- Live Spotify search ---
             if (_spotifyService.IsConfigured)
             {
                 var tasks = new[]
                 {
                     _spotifyService.SearchTracks(q, 10, 0),
-                    _spotifyService.SearchTracks(q, 10, 10),
                     _spotifyService.SearchTracks($"artist:{q}", 10, 0),
                 };
                 var batches = await Task.WhenAll(tasks);
@@ -200,34 +199,38 @@ public class ArtistsController : ControllerBase
                     .Select(g => g.First())
                     .ToList();
 
-                // Resolve local artist IDs where possible
-                try
+                if (spotifyResults.Count > 0)
                 {
-                    var names = spotifyResults.Select(r => r.ArtistName.ToLower()).Distinct().ToList();
-                    var localByName = await _context.Artists
-                        .Where(a => names.Contains(a.Name.ToLower()))
-                        .ToListAsync();
-                    
-                    var localDict = localByName
-                        .GroupBy(a => a.Name.ToLower())
-                        .ToDictionary(g => g.Key, g => g.First().Id);
-
-                    foreach (var result in spotifyResults)
+                    // Resolve local artist IDs where possible
+                    try
                     {
-                        if (localDict.TryGetValue(result.ArtistName.ToLower(), out var localId))
-                            result.ArtistId = localId;
+                        var names = spotifyResults.Select(r => r.ArtistName.ToLower()).Distinct().ToList();
+                        var localByName = await _context.Artists
+                            .Where(a => names.Contains(a.Name.ToLower()))
+                            .ToListAsync();
+
+                        var localDict = localByName
+                            .GroupBy(a => a.Name.ToLower())
+                            .ToDictionary(g => g.Key, g => g.First().Id);
+
+                        foreach (var result in spotifyResults)
+                        {
+                            if (localDict.TryGetValue(result.ArtistName.ToLower(), out var localId))
+                                result.ArtistId = localId;
+                        }
                     }
-                }
-                catch (Exception dbEx)
-                {
-                    // Log but don't fail the whole request if DB lookup fails
-                    Console.WriteLine($"⚠️ DB lookup failed in SearchSongs: {dbEx.Message}");
+                    catch (Exception dbEx)
+                    {
+                        Console.WriteLine($"⚠️ DB lookup failed in SearchSongs: {dbEx.Message}");
+                    }
+
+                    return spotifyResults;
                 }
 
-                return spotifyResults;
+                Console.WriteLine($"⚠️ Spotify returned no results for '{q}', falling back to local DB.");
             }
 
-            // --- Fallback: DB top-tracks search ---
+            // --- Fallback: DB top-tracks search (also used when Spotify is unconfigured or returns nothing) ---
             var searchLower = q.ToLower();
             var artists = await _context.Artists.ToListAsync();
             var placeholders = new HashSet<string> { "Track 1", "Track 2", "Track 3" };
@@ -244,6 +247,26 @@ public class ArtistsController : ControllerBase
                         ArtistId = artist.Id,
                         ArtistName = artist.Name,
                         SongName = track,
+                        ImageUrl = artist.ImageUrl,
+                        Source = "local"
+                    });
+                }
+            }
+
+            // If still nothing, return matching artist names as "Artist - Top Tracks" suggestions
+            if (results.Count == 0)
+            {
+                var matchedArtists = artists
+                    .Where(a => a.Name.ToLower().Contains(searchLower))
+                    .Take(10);
+
+                foreach (var artist in matchedArtists)
+                {
+                    results.Add(new SongResult
+                    {
+                        ArtistId = artist.Id,
+                        ArtistName = artist.Name,
+                        SongName = "Top Tracks",
                         ImageUrl = artist.ImageUrl,
                         Source = "local"
                     });

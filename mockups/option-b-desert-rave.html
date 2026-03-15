@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RaveRadar — Option B: Desert Rave</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+/* ── OPTION B: DESERT RAVE ─────────────────────────────────────────────────
+   Palette: Scorched earth, molten gold, blood orange, electric teal, sand.
+   Vibe: fire-lit warehouse at 3am, sunbaked art installation, Burning Man.
+   Warm & psychedelic — sacred geometry texture, fiery glows, earthy depth.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg:          #0c0600;
+  --bg-surface:  #130900;
+  --bg-elevated: #1c0e00;
+  --border:      rgba(220,90,0,0.2);
+  --border-gold: rgba(255,180,0,0.3);
+  --text:        #f5e8d0;
+  --text-sec:    #9a7a50;
+  --text-muted:  #4a3318;
+  --gold:        #ffb300;
+  --orange:      #ff5e00;
+  --teal:        #00d4b4;
+  --cream:       #f0d8a0;
+  --red:         #e62200;
+  --radius:      12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Outfit', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Subtle sacred-geometry dot grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(220,90,0,0.12) 1px, transparent 1px);
+  background-size: 36px 36px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Warm atmospheric glow */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 15% 80%, rgba(200,50,0,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 45% at 85% 20%, rgba(255,140,0,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse 35% 35% at 50% 50%, rgba(0,200,170,0.06) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: emberPulse 8s ease-in-out infinite alternate;
+}
+@keyframes emberPulse {
+  0%   { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.app-container { max-width: 1200px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+
+/* ── NAVBAR ─────────────────────────────────────────────────── */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  background: linear-gradient(90deg, var(--gold), var(--orange), var(--red));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 16px rgba(255,120,0,0.5));
+}
+
+.nav-links { display: flex; gap: 4px; align-items: center; }
+.nav-links a {
+  color: var(--text-sec);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+.nav-links a:hover { color: var(--text); background: rgba(220,90,0,0.1); }
+.nav-links a.active {
+  color: var(--gold);
+  background: rgba(255,180,0,0.1);
+  border: 1px solid rgba(255,180,0,0.2);
+}
+
+.nav-user { font-size: 12px; color: var(--text-muted); padding: 6px 12px; }
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-sec);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.logout-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ── CONTENT ─────────────────────────────────────────────────── */
+.content { padding: 44px 0 100px; }
+
+/* ── DASHBOARD HEADER ────────────────────────────────────────── */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 52px;
+  padding: 28px 32px;
+  border-radius: 18px;
+  background: rgba(19,9,0,0.85);
+  border: 1px solid var(--border-gold);
+  box-shadow: 0 0 60px rgba(255,140,0,0.08), inset 0 1px 0 rgba(255,180,0,0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Flame-line top edge */
+.dashboard-header::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--red) 20%, var(--orange) 50%, var(--gold) 80%, transparent 100%);
+}
+
+/* Decorative corner hex */
+.dashboard-header::before {
+  content: '⬡';
+  position: absolute;
+  right: 28px;
+  bottom: -14px;
+  font-size: 120px;
+  color: rgba(255,140,0,0.04);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.welcome-section h1 {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--cream) 45%, var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+}
+.welcome-section p { font-size: 13px; color: var(--text-sec); }
+.inline-link { color: var(--teal); text-decoration: none; font-weight: 600; }
+
+.dashboard-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10,6,0,0.8);
+  border: 1px solid var(--border);
+  padding: 6px 6px 6px 16px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.dashboard-search input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  width: 210px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.dashboard-search input::placeholder { color: var(--text-muted); }
+.demo-btn {
+  background: linear-gradient(135deg, var(--orange), var(--gold));
+  color: #000;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 0 14px rgba(255,120,0,0.35);
+}
+
+/* ── SECTION HEADING ─────────────────────────────────────────── */
+h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+h2::before {
+  content: '';
+  display: block;
+  width: 3px; height: 20px;
+  background: linear-gradient(180deg, var(--gold), var(--orange));
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(255,140,0,0.6);
+  flex-shrink: 0;
+}
+
+/* ── GRID ────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 60px;
+}
+
+/* ── CARDS ───────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,140,0,0.45);
+  box-shadow: 0 12px 40px rgba(200,70,0,0.22);
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--red), var(--orange), var(--gold));
+  opacity: 0;
+  transition: opacity 0.25s;
+  z-index: 2;
+}
+.card:hover::before { opacity: 1; }
+
+.card-img {
+  width: 100%; height: 190px;
+  object-fit: cover; display: block;
+  filter: saturate(1.2) sepia(0.1);
+}
+.card-content { padding: 16px; }
+.card h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px; gap: 8px;
+}
+
+.fav-btn {
+  background: transparent; border: none;
+  font-size: 20px; color: var(--text-muted);
+  cursor: pointer; padding: 0; line-height: 1; transition: all 0.15s;
+}
+.fav-btn:hover { transform: scale(1.2); }
+.fav-btn.active { color: var(--gold); text-shadow: 0 0 12px rgba(255,180,0,0.7); }
+
+.genres { font-size: 12px; color: var(--text-sec); margin: 4px 0 10px; }
+
+.links { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.link {
+  font-size: 11px; font-weight: 600;
+  padding: 4px 10px; border-radius: 20px;
+  text-decoration: none; transition: background 0.15s;
+}
+.link.spotify  { background: rgba(30,215,96,0.1); color: #1ed760; }
+.link.soundcloud { background: rgba(255,85,0,0.1); color: #ff5500; }
+.link.spotify:hover  { background: rgba(30,215,96,0.2); }
+.link.soundcloud:hover { background: rgba(255,85,0,0.2); }
+
+/* ── EVENT SPECIFICS ─────────────────────────────────────────── */
+.card-badge {
+  position: absolute; top: 12px; right: 12px;
+  background: rgba(12,6,0,0.85);
+  backdrop-filter: blur(8px);
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; color: var(--gold);
+  border: 1px solid rgba(255,180,0,0.3);
+}
+
+.rec-reason {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.05em; margin-bottom: 6px;
+  background: linear-gradient(90deg, var(--gold), var(--teal));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.rec-reason::before { content: '◆ '; }
+
+.event-meta { font-size: 12px; color: var(--text-sec); margin: 4px 0 10px; }
+
+.event-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tag {
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.artist-tag { background: rgba(255,140,0,0.12); color: var(--orange); }
+.genre-tag  { background: rgba(0,212,180,0.1);  color: var(--teal); }
+
+.btn {
+  display: block; width: 100%; text-align: center;
+  background: linear-gradient(135deg, var(--red), var(--orange), var(--gold));
+  color: #000; font-weight: 700; font-size: 13px;
+  padding: 10px 20px; border-radius: 8px;
+  text-decoration: none; margin-top: 14px;
+  box-shadow: 0 4px 18px rgba(200,70,0,0.3);
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.btn:hover { opacity: 0.88; box-shadow: 0 4px 28px rgba(255,140,0,0.45); }
+
+.section-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+}
+.section-header h2 { margin-bottom: 0; flex: 1; }
+.city-toggle-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-sec); padding: 5px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.city-toggle-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+.mockup-label {
+  position: fixed; bottom: 20px; right: 20px;
+  background: rgba(12,6,0,0.93);
+  border: 1px solid var(--border-gold);
+  border-radius: 12px; padding: 12px 18px;
+  font-size: 13px; color: var(--text-sec);
+  backdrop-filter: blur(12px); z-index: 999;
+}
+.mockup-label strong { color: var(--gold); display: block; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="app-container">
+
+  <nav class="navbar">
+    <span class="logo">RaveRadar</span>
+    <div class="nav-links">
+      <a href="#" class="active">Dashboard</a>
+      <a href="#">Discover</a>
+      <a href="#">Preferences</a>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="nav-user">heyzara@example.com</span>
+      <button class="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <div class="dashboard-header">
+      <div class="welcome-section">
+        <h1>Hey, heyzara</h1>
+        <p>Events in Los Angeles · <a href="#" class="inline-link">Change city</a></p>
+      </div>
+      <form class="dashboard-search">
+        <input type="text" placeholder="Search artists..." />
+        <button class="demo-btn" type="submit">Search</button>
+      </form>
+    </div>
+
+    <section>
+      <h2>Trending Artists</h2>
+      <div class="grid">
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=190&fit=crop" alt="GRiZ" />
+          <div class="card-content">
+            <div class="card-header-flex"><h3>GRiZ</h3><button class="fav-btn active">★</button></div>
+            <p class="genres">Funk, Bass Music, Electronic</p>
+            <div class="links">
+              <a href="#" class="link spotify">Spotify</a>
+              <a href="#" class="link soundcloud">SoundCloud</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=400&h=190&fit=crop" alt="ODESZA" />
+          <div class="card-content">
+            <div class="card-header-flex"><h3>ODESZA</h3><button class="fav-btn">☆</button></div>
+            <p class="genres">Indie Electronic, Chillwave</p>
+            <div class="links">
+              <a href="#" class="link spotify">Spotify</a>
+              <a href="#" class="link soundcloud">SoundCloud</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&h=190&fit=crop" alt="Rezz" />
+          <div class="card-content">
+            <div class="card-header-flex"><h3>Rezz</h3><button class="fav-btn active">★</button></div>
+            <p class="genres">Dark Techno, Hypnotic Bass</p>
+            <div class="links">
+              <a href="#" class="link spotify">Spotify</a>
+              <a href="#" class="link soundcloud">SoundCloud</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400&h=190&fit=crop" alt="Disclosure" />
+          <div class="card-content">
+            <div class="card-header-flex"><h3>Disclosure</h3><button class="fav-btn">☆</button></div>
+            <p class="genres">UK House, Garage, Deep House</p>
+            <div class="links">
+              <a href="#" class="link spotify">Spotify</a>
+              <a href="#" class="link soundcloud">SoundCloud</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section>
+      <div class="section-header">
+        <h2>Events in Los Angeles</h2>
+        <button class="city-toggle-btn">Show all cities</button>
+      </div>
+      <div class="grid">
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?w=400&h=190&fit=crop" alt="Event" />
+          <div class="card-content">
+            <div class="card-badge">Mar 22</div>
+            <p class="rec-reason">GRiZ is playing · Bass Heavy energy · in Los Angeles</p>
+            <h3>GRiZ: Full Flex Tour</h3>
+            <p class="event-meta">Hollywood Palladium · Los Angeles</p>
+            <div class="event-tags">
+              <span class="tag artist-tag">GRiZ</span>
+              <span class="tag genre-tag">Bass Music</span>
+            </div>
+            <a href="#" class="btn">Get Tickets</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=400&h=190&fit=crop" alt="Event" />
+          <div class="card-content">
+            <div class="card-badge">Apr 5</div>
+            <p class="rec-reason">Rezz brings the Dark & Hypnotic energy you're into</p>
+            <h3>Rezz — SPIRAL TOUR</h3>
+            <p class="event-meta">The Shrine · Los Angeles</p>
+            <div class="event-tags">
+              <span class="tag artist-tag">Rezz</span>
+              <span class="tag genre-tag">Dark Techno</span>
+            </div>
+            <a href="#" class="btn">Get Tickets</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400&h=190&fit=crop" alt="Event" />
+          <div class="card-content">
+            <div class="card-badge">Apr 12</div>
+            <p class="rec-reason">House — one of your favourite genres · in Los Angeles</p>
+            <h3>Nocturnal Wonderland</h3>
+            <p class="event-meta">NOS Events Center · San Bernardino</p>
+            <div class="event-tags">
+              <span class="tag artist-tag">Disclosure</span>
+              <span class="tag genre-tag">House</span>
+            </div>
+            <a href="#" class="btn">Get Tickets</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <img class="card-img" src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=190&fit=crop" alt="Event" />
+          <div class="card-content">
+            <div class="card-badge">Apr 19</div>
+            <p class="rec-reason">Discover Subtronics — Riddim sound similar to your favourites</p>
+            <h3>Bass Canyon 2025</h3>
+            <p class="event-meta">Gorge Amphitheatre · George</p>
+            <div class="event-tags">
+              <span class="tag artist-tag">Subtronics</span>
+              <span class="tag genre-tag">Riddim</span>
+            </div>
+            <a href="#" class="btn">Get Tickets</a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="mockup-label">
+  <strong>Option B — Desert Rave</strong>
+  Molten gold · blood orange · sacred geometry
+</div>
+</body>
+</html>
