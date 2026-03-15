@@ -17,6 +17,10 @@ public class SpotifyService
     private const string TokenUrl = "https://accounts.spotify.com/api/token";
     private const string ApiBase = "https://api.spotify.com/v1";
 
+    // Global rate limiter shared across ALL scoped instances — keeps total concurrent
+    // Spotify calls to 2 and enforces a 300 ms gap between releases to avoid burst 429s.
+    private static readonly SemaphoreSlim _globalSlot = new(2, 2);
+
     public SpotifyService(
         IHttpClientFactory httpClientFactory,
         IConfiguration config,
@@ -89,18 +93,31 @@ public class SpotifyService
         var token = await GetAccessToken();
         if (token == null) return null;
 
-        var client = _httpClientFactory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
+        await _globalSlot.WaitAsync();
         try
         {
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
             var response = await client.GetAsync(url);
+
+            // Respect Retry-After on 429 — wait and retry once
+            if ((int)response.StatusCode == 429)
+            {
+                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10);
+                _logger.LogWarning("Spotify 429 — waiting {Seconds}s before retry", retryAfter.TotalSeconds);
+                await Task.Delay(retryAfter);
+
+                response = await client.GetAsync(url);
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Spotify API error {Status} for {Url}: {Body}", response.StatusCode, url, body);
                 return null;
             }
+
             return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         }
         catch (Exception ex)
@@ -108,18 +125,29 @@ public class SpotifyService
             _logger.LogError(ex, "Spotify request failed: {Url}", url);
             return null;
         }
+        finally
+        {
+            // Small gap between releases so concurrent callers don't all fire at once
+            await Task.Delay(300);
+            _globalSlot.Release();
+        }
     }
 
     public async Task<SpotifyArtistData?> FindArtist(string name)
     {
+        var cacheKey = $"spotify:artist:{name.ToLower()}";
+        if (_cache.TryGetValue<SpotifyArtistData?>(cacheKey, out var cached))
+            return cached;
+
         var url = $"{ApiBase}/search?q={Uri.EscapeDataString(name)}&type=artist&limit=1";
         using var doc = await GetAsync(url);
         if (doc == null) return null;
 
         var items = doc.RootElement.GetProperty("artists").GetProperty("items");
-        if (items.GetArrayLength() == 0) return null;
+        var result = items.GetArrayLength() == 0 ? null : ParseArtist(items[0]);
 
-        return ParseArtist(items[0]);
+        _cache.Set(cacheKey, result, TimeSpan.FromHours(24));
+        return result;
     }
 
     public async Task<List<SpotifyArtistData>> SearchArtists(string query, int limit = 10)

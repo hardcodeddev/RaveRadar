@@ -172,10 +172,10 @@ public class EventsController : ControllerBase
         // Spotify fallback for artists not in DB (cap at 15 to avoid hammering rate limits)
         if (_spotifyService.IsConfigured)
         {
-            var missing = nameLowers.Where(n => !profiles.ContainsKey(n)).Take(15).ToList();
+            var missing = nameLowers.Where(n => !profiles.ContainsKey(n)).Take(8).ToList();
             if (missing.Any())
             {
-                var sem = new SemaphoreSlim(4, 4);
+                var sem = new SemaphoreSlim(2, 2);
                 var toInsert = new System.Collections.Concurrent.ConcurrentBag<Artist>();
 
                 await Task.WhenAll(missing.Select(async nameLower =>

@@ -99,10 +99,10 @@ public class ArtistsController : ControllerBase
                 else
                 {
                     // No search term — enrich up to 20 artists missing images
-                    var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(20).ToList();
+                    var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(5).ToList();
                     if (missing.Count > 0)
                     {
-                        var sem = new SemaphoreSlim(5, 5);
+                        var sem = new SemaphoreSlim(2, 2);
                         await Task.WhenAll(missing.Select(async artist =>
                         {
                             await sem.WaitAsync();
