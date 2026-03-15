@@ -36,38 +36,94 @@ public class ArtistsController : ControllerBase
             }
 
             var results = await query.ToListAsync();
-            Console.WriteLine($"🔍 GetArtists search='{search}' genre='{genre}' found {results.Count} results.");
 
-            // Enrich artists missing images via Spotify on-the-fly (cap at 20 per request)
             if (_spotifyService.IsConfigured)
             {
-                var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(20).ToList();
-                if (missing.Count > 0)
+                // When searching, augment with live Spotify artist search so nothing is missing
+                if (!string.IsNullOrEmpty(search))
                 {
-                    var sem = new SemaphoreSlim(5, 5);
-                    var enrichTasks = missing.Select(async artist =>
-                    {
-                        await sem.WaitAsync();
-                        try
-                        {
-                            var data = await _spotifyService.FindArtist(artist.Name);
-                            if (data?.ImageUrl != null)
-                            {
-                                artist.ImageUrl = data.ImageUrl;
-                                if (artist.SpotifyId == null) artist.SpotifyId = data.SpotifyId;
-                            }
-                        }
-                        finally { sem.Release(); }
-                    });
-                    await Task.WhenAll(enrichTasks);
+                    var spotifyArtists = await _spotifyService.SearchArtists(search, 10);
 
-                    // Persist newly fetched images back to DB
-                    var enriched = missing.Where(a => !string.IsNullOrEmpty(a.ImageUrl)).ToList();
-                    if (enriched.Count > 0)
+                    // Load existing DB artists by spotifyId or name to avoid duplicates
+                    var spotifyIds = spotifyArtists.Where(s => s.SpotifyId != null).Select(s => s.SpotifyId!).ToList();
+                    var spotifyNames = spotifyArtists.Select(s => s.Name.ToLower()).ToList();
+                    var existing = await _context.Artists
+                        .Where(a => (a.SpotifyId != null && spotifyIds.Contains(a.SpotifyId)) ||
+                                    spotifyNames.Contains(a.Name.ToLower()))
+                        .ToListAsync();
+
+                    var existingBySpotifyId = existing.Where(a => a.SpotifyId != null)
+                        .ToDictionary(a => a.SpotifyId!);
+                    var existingByName = existing.ToDictionary(a => a.Name.ToLower());
+
+                    var newArtists = new List<Artist>();
+                    foreach (var s in spotifyArtists)
+                    {
+                        Artist? match = null;
+                        if (s.SpotifyId != null) existingBySpotifyId.TryGetValue(s.SpotifyId, out match);
+                        match ??= existingByName.GetValueOrDefault(s.Name.ToLower());
+
+                        if (match != null)
+                        {
+                            // Update image/spotifyId if missing
+                            if (string.IsNullOrEmpty(match.ImageUrl) && s.ImageUrl != null)
+                                match.ImageUrl = s.ImageUrl;
+                            if (match.SpotifyId == null && s.SpotifyId != null)
+                                match.SpotifyId = s.SpotifyId;
+                        }
+                        else
+                        {
+                            // New artist — insert into DB so it gets a real ID
+                            var artist = new Artist
+                            {
+                                Name = s.Name,
+                                SpotifyId = s.SpotifyId,
+                                ImageUrl = s.ImageUrl,
+                                Popularity = s.Popularity,
+                                Genres = s.Genres,
+                            };
+                            _context.Artists.Add(artist);
+                            newArtists.Add(artist);
+                        }
+                    }
+
+                    if (newArtists.Count > 0 || existing.Any(a => _context.Entry(a).State == Microsoft.EntityFrameworkCore.EntityState.Modified))
                         await _context.SaveChangesAsync();
+
+                    // Merge: DB results first, then newly inserted Spotify artists not already present
+                    var resultIds = results.Select(a => a.Id).ToHashSet();
+                    results = results
+                        .Concat(newArtists.Where(a => !resultIds.Contains(a.Id)))
+                        .ToList();
+                }
+                else
+                {
+                    // No search term — enrich up to 20 artists missing images
+                    var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(20).ToList();
+                    if (missing.Count > 0)
+                    {
+                        var sem = new SemaphoreSlim(5, 5);
+                        await Task.WhenAll(missing.Select(async artist =>
+                        {
+                            await sem.WaitAsync();
+                            try
+                            {
+                                var data = await _spotifyService.FindArtist(artist.Name);
+                                if (data?.ImageUrl != null)
+                                {
+                                    artist.ImageUrl = data.ImageUrl;
+                                    if (artist.SpotifyId == null) artist.SpotifyId = data.SpotifyId;
+                                }
+                            }
+                            finally { sem.Release(); }
+                        }));
+                        if (missing.Any(a => !string.IsNullOrEmpty(a.ImageUrl)))
+                            await _context.SaveChangesAsync();
+                    }
                 }
             }
 
+            Console.WriteLine($"GetArtists search='{search}' genre='{genre}' returning {results.Count} results.");
             return results;
         }
         catch (Exception ex)

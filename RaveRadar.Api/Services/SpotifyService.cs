@@ -111,6 +111,19 @@ public class SpotifyService
         return ParseArtist(items[0]);
     }
 
+    public async Task<List<SpotifyArtistData>> SearchArtists(string query, int limit = 10)
+    {
+        var url = $"{ApiBase}/search?q={Uri.EscapeDataString(query)}&type=artist&limit={limit}";
+        using var doc = await GetAsync(url);
+        if (doc == null) return new();
+
+        var items = doc.RootElement.GetProperty("artists").GetProperty("items");
+        return items.EnumerateArray()
+            .Where(el => el.TryGetProperty("name", out _))
+            .Select(ParseArtist)
+            .ToList();
+    }
+
     // Note: top-tracks and related-artists require OAuth user tokens (not client credentials).
     // We use artist name search to get tracks instead.
     public async Task<List<string>> GetTopTracks(string artistName)
