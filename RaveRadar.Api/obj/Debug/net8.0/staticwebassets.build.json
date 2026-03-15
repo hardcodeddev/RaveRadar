@@ -1,11 +1,1 @@
-{
-  "Version": 1,
-  "Hash": "vNKMH5xPKl/f9Y0b1S++xZeHJI5aF9F//Zcu7MTfgPo=",
-  "Source": "RaveRadar.Api",
-  "BasePath": "_content/RaveRadar.Api",
-  "Mode": "Default",
-  "ManifestType": "Build",
-  "ReferencedProjectsConfiguration": [],
-  "DiscoveryPatterns": [],
-  "Assets": []
-}
+{"Version":1,"Hash":"YAqOp//3C8CT5dIm4mHhilQQopw34DqiCTc1K0W6BUk=","Source":"RaveRadar.Api","BasePath":"/","Mode":"Root","ManifestType":"Build","ReferencedProjectsConfiguration":[],"DiscoveryPatterns":[],"Assets":[],"Endpoints":[]}

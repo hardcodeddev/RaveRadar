@@ -37,6 +37,37 @@ public class ArtistsController : ControllerBase
 
             var results = await query.ToListAsync();
             Console.WriteLine($"🔍 GetArtists search='{search}' genre='{genre}' found {results.Count} results.");
+
+            // Enrich artists missing images via Spotify on-the-fly (cap at 20 per request)
+            if (_spotifyService.IsConfigured)
+            {
+                var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(20).ToList();
+                if (missing.Count > 0)
+                {
+                    var sem = new SemaphoreSlim(5, 5);
+                    var enrichTasks = missing.Select(async artist =>
+                    {
+                        await sem.WaitAsync();
+                        try
+                        {
+                            var data = await _spotifyService.FindArtist(artist.Name);
+                            if (data?.ImageUrl != null)
+                            {
+                                artist.ImageUrl = data.ImageUrl;
+                                if (artist.SpotifyId == null) artist.SpotifyId = data.SpotifyId;
+                            }
+                        }
+                        finally { sem.Release(); }
+                    });
+                    await Task.WhenAll(enrichTasks);
+
+                    // Persist newly fetched images back to DB
+                    var enriched = missing.Where(a => !string.IsNullOrEmpty(a.ImageUrl)).ToList();
+                    if (enriched.Count > 0)
+                        await _context.SaveChangesAsync();
+                }
+            }
+
             return results;
         }
         catch (Exception ex)
