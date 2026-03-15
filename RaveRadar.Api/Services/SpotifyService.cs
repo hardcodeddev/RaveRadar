@@ -271,9 +271,8 @@ public class SpotifyService
         if (data.Genres.Any())
             artist.Genres = data.Genres;
 
-        var tracks = await GetTopTracks(data.Name);
-        if (tracks.Any())
-            artist.TopTracks = tracks;
+        // GetTopTracks makes a second API call — skipped here to keep call count low.
+        // Tracks are populated on-demand via SearchTracks when the user searches.
     }
 
     public async Task<List<string>> GetArtistGenres(string spotifyId)

@@ -27,8 +27,12 @@ public class SpotifyEnrichJob : IJob
             return;
         }
 
+        // Process a small batch per run so startup doesn't hammer Spotify with 500+ calls.
+        // Unenriched artists are processed 50 at a time; the job runs every 24h so the
+        // full catalogue is enriched gradually over multiple days.
         var unenriched = await _context.Artists
             .Where(a => a.SpotifyId == null)
+            .Take(50)
             .ToListAsync();
 
         if (!unenriched.Any())
@@ -37,14 +41,14 @@ public class SpotifyEnrichJob : IJob
             return;
         }
 
-        _logger.LogInformation("Enriching {Count} artists via Spotify...", unenriched.Count);
+        _logger.LogInformation("Enriching {Count} artists via Spotify (batch of 50)...", unenriched.Count);
 
         foreach (var artist in unenriched)
         {
             try
             {
                 await _spotifyService.EnrichArtist(artist);
-                await Task.Delay(150); // ~400 req/min, well under Spotify's 600/min limit
+                await Task.Delay(500); // ~120 req/min — generous gap to avoid 429s
             }
             catch (Exception ex)
             {
@@ -53,6 +57,6 @@ public class SpotifyEnrichJob : IJob
         }
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Spotify enrichment complete.");
+        _logger.LogInformation("Spotify enrichment batch complete. {Count} artists processed.", unenriched.Count);
     }
 }

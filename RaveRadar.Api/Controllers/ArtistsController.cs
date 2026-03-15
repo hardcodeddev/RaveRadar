@@ -96,31 +96,8 @@ public class ArtistsController : ControllerBase
                         .Concat(newArtists.Where(a => !resultIds.Contains(a.Id)))
                         .ToList();
                 }
-                else
-                {
-                    // No search term — enrich up to 20 artists missing images
-                    var missing = results.Where(a => string.IsNullOrEmpty(a.ImageUrl)).Take(5).ToList();
-                    if (missing.Count > 0)
-                    {
-                        var sem = new SemaphoreSlim(2, 2);
-                        await Task.WhenAll(missing.Select(async artist =>
-                        {
-                            await sem.WaitAsync();
-                            try
-                            {
-                                var data = await _spotifyService.FindArtist(artist.Name);
-                                if (data?.ImageUrl != null)
-                                {
-                                    artist.ImageUrl = data.ImageUrl;
-                                    if (artist.SpotifyId == null) artist.SpotifyId = data.SpotifyId;
-                                }
-                            }
-                            finally { sem.Release(); }
-                        }));
-                        if (missing.Any(a => !string.IsNullOrEmpty(a.ImageUrl)))
-                            await _context.SaveChangesAsync();
-                    }
-                }
+                // No search term — background SpotifyEnrichJob handles image enrichment;
+                // making live calls here on every page load was the main source of 429s.
             }
 
             Console.WriteLine($"GetArtists search='{search}' genre='{genre}' returning {results.Count} results.");

@@ -11,12 +11,10 @@ namespace RaveRadar.Api.Controllers;
 public class EventsController : ControllerBase
 {
     private readonly AppDbContext _context;
-    private readonly SpotifyService _spotifyService;
 
-    public EventsController(AppDbContext context, SpotifyService spotifyService)
+    public EventsController(AppDbContext context)
     {
         _context = context;
-        _spotifyService = spotifyService;
     }
 
     [HttpGet]
@@ -169,64 +167,9 @@ public class EventsController : ControllerBase
             };
         }
 
-        // Spotify fallback for artists not in DB (cap at 15 to avoid hammering rate limits)
-        if (_spotifyService.IsConfigured)
-        {
-            var missing = nameLowers.Where(n => !profiles.ContainsKey(n)).Take(8).ToList();
-            if (missing.Any())
-            {
-                var sem = new SemaphoreSlim(2, 2);
-                var toInsert = new System.Collections.Concurrent.ConcurrentBag<Artist>();
-
-                await Task.WhenAll(missing.Select(async nameLower =>
-                {
-                    await sem.WaitAsync();
-                    try
-                    {
-                        var originalName = artistNames.First(n => n.ToLower() == nameLower);
-                        var data = await _spotifyService.FindArtist(originalName);
-                        if (data != null && (data.Genres.Any() || data.ImageUrl != null))
-                        {
-                            var vibes = SpotifyService.DeriveVibes(data.Genres);
-                            profiles[nameLower] = new EventArtistProfile
-                            {
-                                Name = originalName,
-                                Genres = data.Genres,
-                                Vibes = vibes
-                            };
-                            toInsert.Add(new Artist
-                            {
-                                Name = originalName,
-                                SpotifyId = data.SpotifyId,
-                                ImageUrl = data.ImageUrl,
-                                Genres = data.Genres,
-                                Popularity = data.Popularity
-                            });
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"⚠️ Spotify lookup failed for artist: {ex.Message}");
-                    }
-                    finally { sem.Release(); }
-                }));
-
-                if (toInsert.Any())
-                {
-                    // Guard against duplicates from concurrent requests
-                    var insertedLowers = toInsert.Select(a => a.Name.ToLower()).ToList();
-                    var alreadyExist = await _context.Artists
-                        .Where(a => insertedLowers.Contains(a.Name.ToLower()))
-                        .Select(a => a.Name.ToLower())
-                        .ToListAsync();
-
-                    foreach (var artist in toInsert.Where(a => !alreadyExist.Contains(a.Name.ToLower())))
-                        _context.Artists.Add(artist);
-
-                    await _context.SaveChangesAsync();
-                }
-            }
-        }
+        // Spotify enrichment is handled by the background SpotifyEnrichJob.
+        // Making live Spotify calls here on every events page load was causing hundreds of
+        // concurrent requests and 429s. Artist genre data will populate gradually via the job.
 
         return profiles;
     }
