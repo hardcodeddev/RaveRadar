@@ -197,6 +197,7 @@ const PreferencesPage = () => {
                             <img
                                 src={artist.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name)}&background=1c1c1c&color=888&size=200`}
                                 alt={artist.name}
+                                onError={e => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name)}&background=1c1c1c&color=888&size=200`; }}
                             />
                             <div className="info">{artist.name}</div>
                         </div>

@@ -599,6 +599,114 @@ input[type="password"]:focus {
 }
 
 /* ============================================================
+   REGISTRATION WIZARD
+   ============================================================ */
+.register-wizard {
+  align-items: flex-start;
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.auth-card-wide {
+  max-width: 780px;
+}
+
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.wizard-steps-line {
+  position: absolute;
+  top: 15px;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.wizard-step-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wizard-step.active .wizard-step-num {
+  background: var(--cyan-alpha);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.wizard-step.done .wizard-step-num {
+  background: rgba(0, 255, 204, 0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.wizard-step-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wizard-step.active .wizard-step-label { color: var(--text); }
+.wizard-step.done .wizard-step-label { color: var(--text-secondary); }
+
+.wizard-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: -4px 0 18px;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.wizard-skip {
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wizard-skip:hover { color: var(--text-secondary); }
+
+.wizard-next-btn {
+  max-width: 240px;
+  margin-top: 0;
+}
+
+/* ============================================================
    PREFERENCES / ACCOUNT PAGE
    ============================================================ */
 .preferences-page {
