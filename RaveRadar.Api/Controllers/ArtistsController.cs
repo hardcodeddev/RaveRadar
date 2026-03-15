@@ -163,15 +163,11 @@ public class ArtistsController : ControllerBase
             // --- Live Spotify search ---
             if (_spotifyService.IsConfigured)
             {
-                var tasks = new[]
-                {
-                    _spotifyService.SearchTracks(q, 10, 0),
-                    _spotifyService.SearchTracks($"artist:{q}", 10, 0),
-                };
-                var batches = await Task.WhenAll(tasks);
+                // Sequential to avoid hitting rate limits (both queries benefit from caching on repeat searches)
+                var batch1 = await _spotifyService.SearchTracks(q, 10, 0);
+                var batch2 = await _spotifyService.SearchTracks($"artist:{q}", 10, 0);
 
-                var spotifyResults = batches
-                    .SelectMany(b => b)
+                var spotifyResults = batch1.Concat(batch2)
                     .GroupBy(r => r.SpotifyTrackId ?? $"{r.ArtistName}|{r.SongName}")
                     .Select(g => g.First())
                     .ToList();

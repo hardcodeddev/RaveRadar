@@ -99,16 +99,27 @@ public class SpotifyService
             var client = _httpClientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var response = await client.GetAsync(url);
-
-            // Respect Retry-After on 429 — wait and retry once
-            if ((int)response.StatusCode == 429)
+            // Exponential backoff: retry up to 3 times on 429
+            int[] backoffSeconds = [5, 15, 30];
+            HttpResponseMessage response = null!;
+            for (int attempt = 0; attempt <= backoffSeconds.Length; attempt++)
             {
-                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10);
-                _logger.LogWarning("Spotify 429 — waiting {Seconds}s before retry", retryAfter.TotalSeconds);
-                await Task.Delay(retryAfter);
-
                 response = await client.GetAsync(url);
+                if ((int)response.StatusCode != 429)
+                    break;
+
+                if (attempt == backoffSeconds.Length)
+                {
+                    _logger.LogError("Spotify 429 persisted after all retries for {Url}", url);
+                    break;
+                }
+
+                var retryAfter = response.Headers.RetryAfter?.Delta
+                    ?? TimeSpan.FromSeconds(backoffSeconds[attempt]);
+                // Always wait at least the backoff amount
+                var wait = TimeSpan.FromSeconds(Math.Max(retryAfter.TotalSeconds, backoffSeconds[attempt]));
+                _logger.LogWarning("Spotify 429 (attempt {Attempt}) — waiting {Seconds}s before retry", attempt + 1, wait.TotalSeconds);
+                await Task.Delay(wait);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -127,8 +138,8 @@ public class SpotifyService
         }
         finally
         {
-            // Small gap between releases so concurrent callers don't all fire at once
-            await Task.Delay(300);
+            // Gap between releases so concurrent callers don't all burst at once
+            await Task.Delay(500);
             _globalSlot.Release();
         }
     }
@@ -182,6 +193,10 @@ public class SpotifyService
     public async Task<List<SongResult>> SearchTracks(string query, int limit = 10, int offset = 0)
     {
         limit = Math.Clamp(limit, 1, 10); // Spotify Client Credentials caps at 10
+        var cacheKey = $"spotify:tracks:{query.ToLower()}:{limit}:{offset}";
+        if (_cache.TryGetValue<List<SongResult>>(cacheKey, out var cachedTracks))
+            return cachedTracks!;
+
         var url = $"{ApiBase}/search?q={Uri.EscapeDataString(query)}&type=track&limit={limit}&offset={offset}";
         _logger.LogInformation("SearchTracks: calling {Url}", url);
         using var doc = await GetAsync(url);
@@ -250,6 +265,7 @@ public class SpotifyService
             _logger.LogError(ex, "Error parsing Spotify tracks response");
         }
 
+        _cache.Set(cacheKey, results, TimeSpan.FromMinutes(10));
         return results;
     }
 
