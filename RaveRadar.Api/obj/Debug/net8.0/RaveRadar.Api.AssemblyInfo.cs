@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RaveRadar.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+24c08535f440a57ecd43d2e518b004f363b6738b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d822c5c82392af20af50c01a332cdc4e49c525c5")]
 [assembly: System.Reflection.AssemblyProductAttribute("RaveRadar.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RaveRadar.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -99,8 +99,10 @@ public class SpotifyService
             var client = _httpClientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // Exponential backoff: retry up to 3 times on 429
-            int[] backoffSeconds = [5, 15, 30];
+            // Exponential backoff: retry up to 2 times on 429, cap wait at 30s.
+            // If Retry-After exceeds 30s, Spotify is heavily throttling — bail immediately.
+            int[] backoffSeconds = [5, 15];
+            const int MaxWaitSeconds = 30;
             HttpResponseMessage response = null!;
             for (int attempt = 0; attempt <= backoffSeconds.Length; attempt++)
             {
@@ -114,12 +116,19 @@ public class SpotifyService
                     break;
                 }
 
-                var retryAfter = response.Headers.RetryAfter?.Delta
-                    ?? TimeSpan.FromSeconds(backoffSeconds[attempt]);
-                // Always wait at least the backoff amount
-                var wait = TimeSpan.FromSeconds(Math.Max(retryAfter.TotalSeconds, backoffSeconds[attempt]));
-                _logger.LogWarning("Spotify 429 (attempt {Attempt}) — waiting {Seconds}s before retry", attempt + 1, wait.TotalSeconds);
-                await Task.Delay(wait);
+                var retryAfterHeader = response.Headers.RetryAfter?.Delta;
+                if (retryAfterHeader.HasValue && retryAfterHeader.Value.TotalSeconds > MaxWaitSeconds)
+                {
+                    _logger.LogWarning("Spotify 429 — Retry-After={Seconds}s exceeds cap, aborting retries for {Url}",
+                        retryAfterHeader.Value.TotalSeconds, url);
+                    break;
+                }
+
+                var waitSeconds = retryAfterHeader.HasValue
+                    ? Math.Min(retryAfterHeader.Value.TotalSeconds, MaxWaitSeconds)
+                    : backoffSeconds[attempt];
+                _logger.LogWarning("Spotify 429 (attempt {Attempt}) — waiting {Seconds}s before retry", attempt + 1, waitSeconds);
+                await Task.Delay(TimeSpan.FromSeconds(waitSeconds));
             }
 
             if (!response.IsSuccessStatusCode)
@@ -163,15 +172,22 @@ public class SpotifyService
 
     public async Task<List<SpotifyArtistData>> SearchArtists(string query, int limit = 10)
     {
+        var cacheKey = $"spotify:artists:{query.ToLower()}:{limit}";
+        if (_cache.TryGetValue<List<SpotifyArtistData>>(cacheKey, out var cached))
+            return cached!;
+
         var url = $"{ApiBase}/search?q={Uri.EscapeDataString(query)}&type=artist&limit={limit}";
         using var doc = await GetAsync(url);
         if (doc == null) return new();
 
         var items = doc.RootElement.GetProperty("artists").GetProperty("items");
-        return items.EnumerateArray()
+        var results = items.EnumerateArray()
             .Where(el => el.TryGetProperty("name", out _))
             .Select(ParseArtist)
             .ToList();
+
+        _cache.Set(cacheKey, results, TimeSpan.FromMinutes(15));
+        return results;
     }
 
     // Note: top-tracks and related-artists require OAuth user tokens (not client credentials).

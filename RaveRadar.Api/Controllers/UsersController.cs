@@ -340,13 +340,14 @@ public class UsersController : ControllerBase
             List<object> songs;
             if (_spotifyService.IsConfigured && songSourceArtists.Any())
             {
-                // One search per artist (offset 0 only) — halves Spotify calls vs. the previous 2-offset approach
-                var searchTasks = songSourceArtists.Take(6).Select(r =>
-                    _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0)
-                        .ContinueWith(t => (Results: t.Result, r.Item1.Name, Reason: r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2))
-                ).ToList();
-
-                var batches = await Task.WhenAll(searchTasks);
+                // Sequential to avoid bursting Spotify — results are cached 10min per artist so
+                // repeat calls are free. Take(4) keeps total calls reasonable per recommendation load.
+                var batches = new List<(List<SongResult> Results, string Name, string Reason)>();
+                foreach (var r in songSourceArtists.Take(4))
+                {
+                    var results = await _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0);
+                    batches.Add((results, r.Item1.Name, r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2));
+                }
 
                 // Resolve local artist IDs
                 var allArtistNames = songSourceArtists.Select(r => r.Item1.Name.ToLower()).Distinct().ToList();
@@ -369,7 +370,7 @@ public class UsersController : ControllerBase
                             track.PreviewUrl,
                             track.ExternalUrl,
                             Source = "Spotify",
-                            Reason = b.Reason
+                            b.Reason
                         };
                     }))
                     .Cast<dynamic>()

@@ -56,7 +56,11 @@ builder.Services.AddQuartz(q =>
 
     var spotifyJobKey = new JobKey("SpotifyEnrichJob");
     q.AddJob<SpotifyEnrichJob>(opts => opts.WithIdentity(spotifyJobKey));
-    q.AddTrigger(opts => opts.ForJob(spotifyJobKey).StartNow().WithSimpleSchedule(x => x.WithIntervalInHours(24).RepeatForever()));
+    // Delay 5 minutes after startup so burst traffic from a restart doesn't immediately
+    // hammer Spotify — then run every 24h. Artists already enriched are skipped anyway.
+    q.AddTrigger(opts => opts.ForJob(spotifyJobKey)
+        .StartAt(DateTimeOffset.UtcNow.AddMinutes(5))
+        .WithSimpleSchedule(x => x.WithIntervalInHours(24).RepeatForever()));
 });
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
