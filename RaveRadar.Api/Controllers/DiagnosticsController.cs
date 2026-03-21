@@ -29,7 +29,9 @@ public class DiagnosticsController : ControllerBase
             PasswordHash = "",
             SavedTracks = new List<Models.SavedTrack>
             {
-                new() { ArtistName = "Deadmau5", SongName = "Strobe", Genres = new List<string> { "progressive house" }, Vibes = new List<string> { "dark", "hypnotic" } }
+                new() { ArtistName = "Deadmau5",   SongName = "Strobe",             Genres = new List<string> { "progressive house" }, Vibes = new List<string> { "dark", "hypnotic" } },
+                new() { ArtistName = "Eric Prydz", SongName = "Pjanoo",             Genres = new List<string> { "progressive house" }, Vibes = new List<string> { "energetic", "euphoric" } },
+                new() { ArtistName = "Feed Me",    SongName = "One Click Headshot", Genres = new List<string> { "electro house" },     Vibes = new List<string> { "aggressive", "dark" } },
             },
             FavoriteArtists = new List<Models.Artist>
             {
@@ -39,6 +41,7 @@ public class DiagnosticsController : ControllerBase
 
         var dummyCandidates = new List<Models.Artist>
         {
+            new() { Id = 0, Name = "Deadmau5",   Genres = new List<string> { "progressive house" }, Popularity = 90 },
             new() { Id = 1, Name = "Eric Prydz", Genres = new List<string> { "progressive house" }, Popularity = 80 },
             new() { Id = 2, Name = "Feed Me",    Genres = new List<string> { "electro house" },     Popularity = 60 },
         };
