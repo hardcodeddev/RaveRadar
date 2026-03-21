@@ -108,8 +108,17 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20260305052914_UpdateEventsWithMetadata',   '8.0.13'),
     ('20260306123219_UpdateArtistModel',          '8.0.13'),
     ('20260307120000_ModernizeModels',            '8.0.13'),
-    ('20260308000000_AddSavedTracks',             '8.0.13')
+    ('20260308000000_AddSavedTracks',             '8.0.13'),
+    ('20260321145737_AddAudioFeaturesToSavedTrack', '8.0.13')
 ON CONFLICT ("MigrationId") DO NOTHING;
+
+-- Audio feature columns added by AddAudioFeaturesToSavedTrack migration
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "BpmValue"            real;
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "EnergyScore"         real;
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "DanceabilityScore"   real;
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "ValenceScore"        real;
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "DarknessScore"       real;
+ALTER TABLE "SavedTracks" ADD COLUMN IF NOT EXISTS "AudioFeaturesEnriched" boolean NOT NULL DEFAULT false;
 
 -- ============================================================
 -- SEED: Genres

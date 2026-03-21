@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Root project for RaveRadar",
   "scripts": {
-    "dev": "npx concurrently -n \"API,Client\" -c \"blue,green\" \"dotnet run --project RaveRadar.Api\" \"npm run dev --prefix RaveRadar.Client\"",
+    "dev:engine": "cd recommendation-engine && uvicorn main:app --reload --port 8000",
+    "dev": "npx concurrently -n \"API,Client,Engine\" -c \"blue,green,magenta\" \"dotnet run --project RaveRadar.Api\" \"npm run dev --prefix RaveRadar.Client\" \"npm run dev:engine\"",
     "install:all": "dotnet restore RaveRadar.Api && npm install --prefix RaveRadar.Client",
     "start": "npm run dev"
   },

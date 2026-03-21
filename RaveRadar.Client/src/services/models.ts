@@ -83,6 +83,9 @@ export interface SongResult {
     externalUrl?: string;
     source?: string;
     reason?: string;
+    bpmValue?: number;
+    energyScore?: number;
+    danceabilityScore?: number;
 }
 
 export interface RecommendationsResult {

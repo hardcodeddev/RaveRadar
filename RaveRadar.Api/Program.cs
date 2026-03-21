@@ -37,13 +37,25 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<EdmTrainService>();
 builder.Services.AddScoped<SpotifyService>();
+builder.Services.AddScoped<RecommendationEngineService>();
 
 // 3. CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        if (builder.Environment.IsProduction())
+        {
+            var allowedOrigin = Environment.GetEnvironmentVariable("ALLOWED_ORIGIN") ?? "";
+            if (!string.IsNullOrEmpty(allowedOrigin))
+                policy.WithOrigins(allowedOrigin).AllowAnyHeader().AllowAnyMethod();
+            else
+                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+        else
+        {
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
     });
 });
 

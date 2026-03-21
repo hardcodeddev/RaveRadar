@@ -28,6 +28,13 @@ COPY --from=server-build /app/out .
 # (important for Render persistent disk mounts)
 RUN mkdir -p /app/data && chmod 777 /app/data
 
+# Install Python + supervisor for the ML sidecar
+RUN apt-get update && apt-get install -y python3 python3-pip supervisor && rm -rf /var/lib/apt/lists/*
+COPY recommendation-engine/requirements.txt /app/engine/requirements.txt
+RUN pip3 install --no-cache-dir -r /app/engine/requirements.txt
+COPY recommendation-engine/ /app/engine/
+COPY supervisord.conf /etc/supervisord.conf
+
 # Default environment variables
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/RaveRadar.db"
@@ -36,5 +43,5 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 # Port exposure
 EXPOSE 8080
 
-# Command to run
-ENTRYPOINT ["dotnet", "RaveRadar.Api.dll"]
+# Run both dotnet API and Python ML engine via supervisord
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

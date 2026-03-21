@@ -172,6 +172,19 @@ const DiscoverPage = () => {
                                         <span className="song-title">{song.songName}</span>
                                         <span className="song-artist">{song.artistName}</span>
                                         {song.reason && <span className="song-reason">{song.reason}</span>}
+                                        {song.bpmValue != null && (
+                                            <div className="audio-pills">
+                                                <span className="audio-pill">{`BPM: ${Math.round(song.bpmValue)}`}</span>
+                                                {song.energyScore != null && (
+                                                    <span className="audio-pill">
+                                                        {`Energy ${'●'.repeat(Math.round(Math.max(0, Math.min(1, song.energyScore)) * 5))}${'○'.repeat(5 - Math.round(Math.max(0, Math.min(1, song.energyScore)) * 5))}`}
+                                                    </span>
+                                                )}
+                                                {song.danceabilityScore != null && song.danceabilityScore > 0.5 && (
+                                                    <span className="audio-pill">Dance</span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="song-actions">
                                         {song.previewUrl && (

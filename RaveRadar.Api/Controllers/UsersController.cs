@@ -15,12 +15,14 @@ public class UsersController : ControllerBase
     private readonly AppDbContext _context;
     private readonly SpotifyService _spotifyService;
     private readonly IMemoryCache _cache;
+    private readonly RecommendationEngineService _mlEngine;
 
-    public UsersController(AppDbContext context, SpotifyService spotifyService, IMemoryCache cache)
+    public UsersController(AppDbContext context, SpotifyService spotifyService, IMemoryCache cache, RecommendationEngineService mlEngine)
     {
         _context = context;
         _spotifyService = spotifyService;
         _cache = cache;
+        _mlEngine = mlEngine;
     }
 
     [HttpGet("{userId}")]
@@ -239,6 +241,37 @@ public class UsersController : ControllerBase
             user.SavedTracks.Add(track);
             await _context.SaveChangesAsync();
             Console.WriteLine($"✅ Track saved for user {userId}: {dto.SongName}");
+
+            // Fire-and-forget audio enrichment — does not block the response
+            var trackId = track.Id;
+            var artistName = dto.ArtistName;
+            var songName = dto.SongName;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var features = await _mlEngine.GetTrackFeatures(artistName, songName);
+                    if (features != null)
+                    {
+                        var saved = await _context.SavedTracks.FindAsync(trackId);
+                        if (saved != null)
+                        {
+                            saved.BpmValue = features.BpmValue;
+                            saved.EnergyScore = features.EnergyScore;
+                            saved.DanceabilityScore = features.DanceabilityScore;
+                            saved.ValenceScore = features.ValenceScore;
+                            saved.DarknessScore = features.DarknessScore;
+                            saved.AudioFeaturesEnriched = true;
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Audio enrichment failed for track {trackId}: {ex.Message}");
+                }
+            });
+
             return Ok(user.SavedTracks);
         }
         catch (Exception ex)
@@ -279,26 +312,123 @@ public class UsersController : ControllerBase
             var user = await _context.Users
                 .Include(u => u.FavoriteArtists)
                 .Include(u => u.FavoriteGenres)
+                .Include(u => u.SavedTracks)
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null) return NotFound();
 
             var favoriteIds = user.FavoriteArtists.Select(a => a.Id).ToHashSet();
+
+            var allPool = await _context.Artists
+                .Where(a => !favoriteIds.Contains(a.Id))
+                .ToListAsync();
+
+            // --- ML engine (primary) ---
+            var mlResult = await _mlEngine.GetRecommendations(user, allPool);
+            if (mlResult != null && mlResult.Artists.Count > 0)
+            {
+                var artistById = allPool.ToDictionary(a => a.Id);
+                var mlArtists = mlResult.Artists
+                    .Where(s => artistById.ContainsKey(s.Id))
+                    .Select(s => new { Artist = artistById[s.Id], Reason = s.Reason })
+                    .ToList();
+
+                var mlSongSources = mlArtists.Take(6)
+                    .Select(r => (r.Artist, r.Reason, IsFav: false))
+                    .Concat(user.FavoriteArtists.Select(a => (a, $"By your favorite, {a.Name}", IsFav: true)))
+                    .DistinctBy(r => r.Item1.Id)
+                    .ToList();
+
+                List<object> mlSongs;
+                if (_spotifyService.IsConfigured && mlSongSources.Any())
+                {
+                    var batches = new List<(List<SongResult> Results, string Name, string Reason)>();
+                    foreach (var r in mlSongSources.Take(4))
+                    {
+                        var results = await _spotifyService.SearchTracks($"artist:\"{r.Item1.Name}\"", 10, 0);
+                        batches.Add((results, r.Item1.Name, r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2));
+                    }
+                    var mlArtistNames = mlSongSources.Select(r => r.Item1.Name.ToLower()).Distinct().ToList();
+                    var mlLocalByName = await _context.Artists
+                        .Where(a => mlArtistNames.Contains(a.Name.ToLower()))
+                        .ToDictionaryAsync(a => a.Name.ToLower());
+
+                    mlSongs = batches
+                        .SelectMany(b => b.Results.Select(track =>
+                        {
+                            mlLocalByName.TryGetValue(track.ArtistName.ToLower(), out var local);
+                            return (object)new
+                            {
+                                ArtistId = local?.Id ?? 0,
+                                track.ArtistName,
+                                track.SongName,
+                                track.ArtistSpotifyId,
+                                track.SpotifyTrackId,
+                                track.ImageUrl,
+                                track.PreviewUrl,
+                                track.ExternalUrl,
+                                Source = "Spotify",
+                                b.Reason
+                            };
+                        }))
+                        .Cast<dynamic>()
+                        .GroupBy(s => (string)s.SpotifyTrackId ?? $"{(string)s.ArtistName}|{(string)s.SongName}")
+                        .Select(g => g.First())
+                        .Take(40)
+                        .Cast<object>()
+                        .ToList();
+                }
+                else
+                {
+                    var placeholders = new HashSet<string> { "Track 1", "Track 2", "Track 3" };
+                    mlSongs = mlSongSources
+                        .SelectMany(r => r.Item1.TopTracks
+                            .Where(t => !placeholders.Contains(t))
+                            .Select(t => (object)new
+                            {
+                                ArtistId = r.Item1.Id,
+                                ArtistName = r.Item1.Name,
+                                SongName = t,
+                                ArtistSpotifyId = (string?)null,
+                                SpotifyTrackId = (string?)null,
+                                ImageUrl = r.Item1.ImageUrl,
+                                PreviewUrl = (string?)null,
+                                ExternalUrl = (string?)null,
+                                Source = "local",
+                                Reason = r.IsFav ? $"By your favorite, {r.Item1.Name}" : r.Item2
+                            }))
+                        .GroupBy(s => ((dynamic)s).SongName)
+                        .Select(g => g.First())
+                        .Take(24)
+                        .ToList();
+                }
+
+                Console.WriteLine($"✅ ML engine: {mlArtists.Count} artist recs for user {userId}");
+                var mlResponse = new
+                {
+                    Artists = mlArtists.Select(r => new
+                    {
+                        r.Artist.Id, r.Artist.Name, r.Artist.ImageUrl,
+                        Genres = r.Artist.Genres,
+                        r.Artist.Popularity, r.Artist.Bio,
+                        TopTracks = r.Artist.TopTracks,
+                        Reason = r.Reason
+                    }),
+                    Songs = mlSongs
+                };
+                _cache.Set(cacheKey, mlResponse, TimeSpan.FromMinutes(30));
+                return Ok(mlResponse);
+            }
+
             var recommendedArtists = new List<(Artist Artist, string Reason)>();
 
-            // --- Genre matching ---
+            // --- Genre matching (fallback) ---
             var targetGenres = user.FavoriteArtists
                 .SelectMany(a => a.Genres)
                 .Concat(user.FavoriteGenres.Select(g => g.Name))
                 .Select(g => g.ToLower())
                 .Distinct()
                 .ToList();
-
-            var seedNames = user.FavoriteArtists.Select(a => a.Name).ToList();
-
-            var allPool = await _context.Artists
-                .Where(a => !favoriteIds.Contains(a.Id))
-                .ToListAsync();
 
             if (targetGenres.Any())
             {
@@ -441,7 +571,9 @@ public class UsersController : ControllerBase
         SavedTracks = user.SavedTracks.OrderByDescending(t => t.AddedAt).Select(t => new
         {
             t.Id, t.SpotifyTrackId, t.SongName, t.ArtistName, t.ArtistSpotifyId,
-            t.ImageUrl, t.PreviewUrl, t.ExternalUrl, t.Genres, t.Vibes, t.AddedAt
+            t.ImageUrl, t.PreviewUrl, t.ExternalUrl, t.Genres, t.Vibes, t.AddedAt,
+            t.BpmValue, t.EnergyScore, t.DanceabilityScore, t.ValenceScore, t.DarknessScore,
+            t.AudioFeaturesEnriched
         })
     };
 }
