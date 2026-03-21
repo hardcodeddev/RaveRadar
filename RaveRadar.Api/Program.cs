@@ -177,9 +177,11 @@ using (var scope = app.Services.CreateScope())
     }
 
     // Sync EdmTrain events on startup (runs in background so app starts immediately)
-    var edmService = scope.ServiceProvider.GetRequiredService<EdmTrainService>();
+    var appServices = app.Services;
     _ = Task.Run(async () =>
     {
+        using var taskScope = appServices.CreateScope();
+        var edmService = taskScope.ServiceProvider.GetRequiredService<EdmTrainService>();
         try
         {
             Console.WriteLine("🎵 Starting EdmTrain sync on startup...");
