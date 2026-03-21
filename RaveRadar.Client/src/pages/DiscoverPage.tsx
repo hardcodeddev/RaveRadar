@@ -119,7 +119,10 @@ const DiscoverPage = () => {
                                 />
                                 <div className="card-content">
                                     {artist.reason && (
-                                        <div className="rec-reason">{artist.reason}</div>
+                                        <div className="rec-reason">
+                                            {artist.fromMl && <span className="ml-badge">ML</span>}
+                                            {artist.reason}
+                                        </div>
                                     )}
                                     <div className="card-header-flex">
                                         <h3>{artist.name}</h3>

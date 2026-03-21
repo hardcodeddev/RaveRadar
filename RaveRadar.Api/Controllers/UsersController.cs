@@ -412,7 +412,8 @@ public class UsersController : ControllerBase
                         Genres = r.Artist.Genres,
                         r.Artist.Popularity, r.Artist.Bio,
                         TopTracks = r.Artist.TopTracks,
-                        Reason = r.Reason
+                        Reason = r.Reason,
+                        FromMl = true
                     }),
                     Songs = mlSongs
                 };
@@ -545,7 +546,8 @@ public class UsersController : ControllerBase
                     Genres = r.Artist.Genres,
                     r.Artist.Popularity, r.Artist.Bio,
                     TopTracks = r.Artist.TopTracks,
-                    Reason = r.Reason
+                    Reason = r.Reason,
+                    FromMl = false
                 }),
                 Songs = songs
             };

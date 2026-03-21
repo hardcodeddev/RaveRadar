@@ -38,36 +38,40 @@ def build_user_profile(
     return profile / norm if norm > 0 else profile
 
 
-def _make_reason(user_profile: np.ndarray, candidate_vector: np.ndarray) -> str:
-    phrases = []
+def _make_reason(user_profile: np.ndarray, candidate_vector: np.ndarray, score: float = 0.0) -> str:
+    parts = []
 
-    # 1. Audio axes (energy, danceability, valence, bpm_tier, darkness)
-    audio_contrib = user_profile[:5] * candidate_vector[:5]
-    for idx in np.argsort(np.abs(audio_contrib))[::-1][:2]:
-        val = float(audio_contrib[idx])
-        if abs(val) < 0.01:
-            continue
-        axis = AXIS_NAMES[idx]
-        pos_phrase, neg_phrase = AXIS_PHRASES[axis]
-        phrases.append(pos_phrase if val > 0 else neg_phrase)
-
-    # 2. Genre overlap — used when audio axes have no signal (no Deezer/Last.fm data)
-    if len(phrases) < 2 and len(user_profile) >= 20:
+    # 1. Top genre match — most human-readable signal, always collect
+    if len(user_profile) >= 20:
         genre_contrib = user_profile[5:20] * candidate_vector[5:20]
-        top_genre_idx = int(np.argmax(genre_contrib))
-        if genre_contrib[top_genre_idx] > 0.001:
-            phrases.append(GENRE_LIST[top_genre_idx])
+        top_g = int(np.argmax(genre_contrib))
+        if genre_contrib[top_g] > 0.001:
+            parts.append(GENRE_LIST[top_g])
 
-    # 3. Vibe overlap — last resort signal
-    if len(phrases) < 2 and len(user_profile) >= 28:
+    # 2. Top vibe match — always collect independently of genre
+    if len(user_profile) >= 28:
         vibe_contrib = user_profile[20:28] * candidate_vector[20:28]
-        top_vibe_idx = int(np.argmax(vibe_contrib))
-        if vibe_contrib[top_vibe_idx] > 0.001:
-            phrases.append(VIBE_LIST[top_vibe_idx].lower())
+        top_v = int(np.argmax(vibe_contrib))
+        if vibe_contrib[top_v] > 0.001:
+            vibe_name = VIBE_LIST[top_v].lower()
+            if vibe_name not in " ".join(parts):   # skip if already implied by genre label
+                parts.append(vibe_name)
 
-    if not phrases:
-        return "matches your taste"
-    return " ".join(phrases) + " taste"
+    # 3. Best audio axis — supplement when genre/vibe alone is thin
+    if len(parts) < 2:
+        audio_contrib = user_profile[:5] * candidate_vector[:5]
+        for idx in np.argsort(np.abs(audio_contrib))[::-1]:
+            val = float(audio_contrib[idx])
+            if abs(val) >= 0.01:
+                pos, neg = AXIS_PHRASES[AXIS_NAMES[idx]]
+                parts.append(pos if val > 0 else neg)
+                break
+
+    if not parts:
+        return "strong match" if score >= 0.6 else "matches your taste"
+
+    qualifier = "strong " if score >= 0.65 else "good " if score >= 0.45 else ""
+    return f"{qualifier}{' · '.join(parts)} match"
 
 
 def score_candidates(
@@ -110,7 +114,7 @@ def score_candidates(
         if (item.get("bpm_std") or 0) > 30:
             score -= 0.05
 
-        results.append({"id": item["id"], "score": score, "reason": _make_reason(user_profile, vec)})
+        results.append({"id": item["id"], "score": score, "reason": _make_reason(user_profile, vec, score)})
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results

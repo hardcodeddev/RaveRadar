@@ -8,6 +8,7 @@ export interface Artist {
     bio?: string;
     topTracks: string[];
     reason?: string;
+    fromMl?: boolean;
 }
 
 export interface Genre {
