@@ -36,12 +36,12 @@ COPY recommendation-engine/ /app/engine/
 COPY supervisord.conf /etc/supervisord.conf
 
 # Default environment variables
-ENV ASPNETCORE_URLS=http://+:8080
 ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/RaveRadar.db"
 ENV ASPNETCORE_ENVIRONMENT=Production
 
-# Port exposure
-EXPOSE 8080
+# Port exposure (Render injects $PORT at runtime, defaults to 10000)
+EXPOSE ${PORT:-10000}
 
 # Run both dotnet API and Python ML engine via supervisord
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+# ASPNETCORE_URLS is set dynamically so the app binds to whatever port Render assigns via $PORT
+ENTRYPOINT ["/bin/sh", "-c", "export ASPNETCORE_URLS=\"http://+:${PORT:-8080}\" && exec /usr/bin/supervisord -c /etc/supervisord.conf"]
