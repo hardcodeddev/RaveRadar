@@ -25,23 +25,22 @@ public class DiagnosticsController : ControllerBase
         var dummyUser = new Models.User
         {
             Id = 0,
-            Username = "diagnostic",
             Email = "diagnostic@test.com",
             PasswordHash = "",
             SavedTracks = new List<Models.SavedTrack>
             {
-                new() { ArtistName = "Deadmau5", SongName = "Strobe", Genres = "progressive house", Vibes = "dark,hypnotic" }
+                new() { ArtistName = "Deadmau5", SongName = "Strobe", Genres = new List<string> { "progressive house" }, Vibes = new List<string> { "dark", "hypnotic" } }
             },
             FavoriteArtists = new List<Models.Artist>
             {
-                new() { Id = 0, Name = "Deadmau5", Genres = "progressive house" }
+                new() { Id = 0, Name = "Deadmau5", Genres = new List<string> { "progressive house" } }
             }
         };
 
         var dummyCandidates = new List<Models.Artist>
         {
-            new() { Id = 1, Name = "Eric Prydz", Genres = "progressive house", Popularity = 80 },
-            new() { Id = 2, Name = "Feed Me",    Genres = "electro house",     Popularity = 60 },
+            new() { Id = 1, Name = "Eric Prydz", Genres = new List<string> { "progressive house" }, Popularity = 80 },
+            new() { Id = 2, Name = "Feed Me",    Genres = new List<string> { "electro house" },     Popularity = 60 },
         };
 
         var result = await _mlEngine.GetRecommendations(dummyUser, dummyCandidates);
