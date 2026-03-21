@@ -1,11 +1,22 @@
-import os
 import asyncio
 import numpy as np
 import httpx
-from cache import cache, TTL_DEEZER, TTL_LASTFM_TAGS, TTL_LASTFM_SIMILAR
+from cache import cache, TTL_DEEZER, TTL_MUSICBRAINZ
 from vibe_tags import VIBE_TAGS
 
-LASTFM_API_KEY = os.getenv("LASTFM_API_KEY", "")
+_MB_HEADERS = {
+    "User-Agent": "RaveRadar/1.0 (raveradar@local.dev)",
+    "Accept": "application/json",
+}
+
+# Semaphore created lazily on first async call (one event loop in FastAPI)
+_mb_sem: asyncio.Semaphore | None = None
+
+def _get_mb_sem() -> asyncio.Semaphore:
+    global _mb_sem
+    if _mb_sem is None:
+        _mb_sem = asyncio.Semaphore(1)
+    return _mb_sem
 
 # 15 canonical EDM genres (must match GENRE_LIST in recommender.py)
 GENRE_LIST = [
@@ -46,66 +57,59 @@ async def fetch_deezer_track(artist: str, title: str) -> dict | None:
     return None
 
 
-async def fetch_lastfm_tags(artist: str, title: str) -> list[str]:
-    if not LASTFM_API_KEY:
-        return []
-    key = f"lastfm:tags:{artist.lower()}:{title.lower()}"
+async def fetch_musicbrainz_tags(artist: str, song: str) -> list[str]:
+    """Fetch community tags from MusicBrainz (no API key required).
+
+    Two-step: search recording → MBID, then lookup tags for that recording.
+    Requests are serialised to 1/sec to respect MusicBrainz rate limits.
+    Results are cached for 12 h so cold-start cost only occurs once.
+    """
+    key = f"mb:tags:{artist.lower()}:{song.lower()}"
     cached = cache.get(key)
     if cached is not None:
         return cached
 
+    sem = _get_mb_sem()
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(
-                "http://ws.audioscrobbler.com/2.0/",
-                params={
-                    "method": "track.getTopTags",
-                    "artist": artist,
-                    "track": title,
-                    "api_key": LASTFM_API_KEY,
-                    "format": "json",
-                    "limit": 10,
-                },
-            )
-            data = r.json()
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            # Step 1 — find recording MBID
+            async with sem:
+                r1 = await client.get(
+                    "https://musicbrainz.org/ws/2/recording/",
+                    headers=_MB_HEADERS,
+                    params={
+                        "query": f'artist:"{artist}" AND recording:"{song}"',
+                        "fmt": "json",
+                        "limit": 1,
+                    },
+                )
+
+            recordings = r1.json().get("recordings", [])
+            if not recordings:
+                cache.set(key, [], TTL_MUSICBRAINZ)
+                return []
+
+            mbid = recordings[0]["id"]
+
+            # Step 2 — fetch tags for that recording
+            async with sem:
+                r2 = await client.get(
+                    f"https://musicbrainz.org/ws/2/recording/{mbid}",
+                    headers=_MB_HEADERS,
+                    params={"inc": "tags", "fmt": "json"},
+                )
+
+            raw_tags = r2.json().get("tags", [])
             tags = [
                 t["name"].lower()
-                for t in data.get("toptags", {}).get("tag", [])
+                for t in sorted(raw_tags, key=lambda x: x.get("count", 0), reverse=True)
             ][:10]
-            cache.set(key, tags, TTL_LASTFM_TAGS)
+
+            cache.set(key, tags, TTL_MUSICBRAINZ)
             return tags
+
     except Exception:
-        return []
-
-
-async def fetch_lastfm_similar_artists(artist: str) -> list[str]:
-    if not LASTFM_API_KEY:
-        return []
-    key = f"lastfm:similar:{artist.lower()}"
-    cached = cache.get(key)
-    if cached is not None:
-        return cached
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(
-                "http://ws.audioscrobbler.com/2.0/",
-                params={
-                    "method": "artist.getSimilar",
-                    "artist": artist,
-                    "api_key": LASTFM_API_KEY,
-                    "format": "json",
-                    "limit": 10,
-                },
-            )
-            data = r.json()
-            names = [
-                a["name"]
-                for a in data.get("similarartists", {}).get("artist", [])
-            ][:10]
-            cache.set(key, names, TTL_LASTFM_SIMILAR)
-            return names
-    except Exception:
+        cache.set(key, [], TTL_MUSICBRAINZ)
         return []
 
 

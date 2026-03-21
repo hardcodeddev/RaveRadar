@@ -1,5 +1,6 @@
 import numpy as np
 from datetime import datetime, timezone
+from feature_extractor import GENRE_LIST, VIBE_LIST
 
 AXIS_NAMES = ["energy", "danceability", "valence", "bpm_tier", "darkness"]
 AXIS_PHRASES = {
@@ -38,17 +39,31 @@ def build_user_profile(
 
 
 def _make_reason(user_profile: np.ndarray, candidate_vector: np.ndarray) -> str:
-    contributions = user_profile[:5] * candidate_vector[:5]
-    top_indices = np.argsort(np.abs(contributions))[::-1][:2]
-
     phrases = []
-    for idx in top_indices:
-        val = contributions[idx]
+
+    # 1. Audio axes (energy, danceability, valence, bpm_tier, darkness)
+    audio_contrib = user_profile[:5] * candidate_vector[:5]
+    for idx in np.argsort(np.abs(audio_contrib))[::-1][:2]:
+        val = float(audio_contrib[idx])
         if abs(val) < 0.01:
             continue
         axis = AXIS_NAMES[idx]
         pos_phrase, neg_phrase = AXIS_PHRASES[axis]
         phrases.append(pos_phrase if val > 0 else neg_phrase)
+
+    # 2. Genre overlap — used when audio axes have no signal (no Deezer/Last.fm data)
+    if len(phrases) < 2 and len(user_profile) >= 20:
+        genre_contrib = user_profile[5:20] * candidate_vector[5:20]
+        top_genre_idx = int(np.argmax(genre_contrib))
+        if genre_contrib[top_genre_idx] > 0.001:
+            phrases.append(GENRE_LIST[top_genre_idx])
+
+    # 3. Vibe overlap — last resort signal
+    if len(phrases) < 2 and len(user_profile) >= 28:
+        vibe_contrib = user_profile[20:28] * candidate_vector[20:28]
+        top_vibe_idx = int(np.argmax(vibe_contrib))
+        if vibe_contrib[top_vibe_idx] > 0.001:
+            phrases.append(VIBE_LIST[top_vibe_idx].lower())
 
     if not phrases:
         return "matches your taste"

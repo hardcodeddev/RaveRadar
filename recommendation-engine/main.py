@@ -11,7 +11,7 @@ load_dotenv()
 
 from feature_extractor import (
     fetch_deezer_track,
-    fetch_lastfm_tags,
+    fetch_musicbrainz_tags,
     build_feature_vector,
     VIBE_TAGS,
 )
@@ -41,7 +41,7 @@ async def _fetch_features(
     """Fetch Deezer + Last.fm in parallel and return (vector, bpm, deezer_data, tags)."""
     deezer, tags = await asyncio.gather(
         fetch_deezer_track(artist, song),
-        fetch_lastfm_tags(artist, song),
+        fetch_musicbrainz_tags(artist, song),
     )
     vec = build_feature_vector(deezer, tags, genres, vibes)
     bpm = float((deezer or {}).get("bpm", 0) or 0)
@@ -126,7 +126,7 @@ async def recommend(req: RecommendRequest):
 async def track_features(req: AudioFeatureRequest):
     deezer, tags = await asyncio.gather(
         fetch_deezer_track(req.artist_name, req.song_name),
-        fetch_lastfm_tags(req.artist_name, req.song_name),
+        fetch_musicbrainz_tags(req.artist_name, req.song_name),
     )
 
     axes = {"energy": 0.0, "danceability": 0.0, "valence": 0.0, "bpm_tier": 0.0, "darkness": 0.0}

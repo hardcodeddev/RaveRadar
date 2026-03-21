@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ML Engine Test UI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #22222f;
+    --border: #2e2e3e;
+    --accent: #7c6fe0;
+    --accent2: #e06f9b;
+    --text: #e8e8f0;
+    --muted: #7878a0;
+    --good: #4ade80;
+    --warn: #facc15;
+    --bad: #f87171;
+    --radius: 8px;
+    --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  #status-dot.up   { background: var(--good); box-shadow: 0 0 6px var(--good); }
+  #status-dot.down { background: var(--bad);  box-shadow: 0 0 6px var(--bad); }
+
+  #status-text { color: var(--muted); font-size: 11px; }
+
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 24px; }
+  .tab {
+    padding: 10px 20px; cursor: pointer; border: none; background: none;
+    color: var(--muted); font-family: var(--font); font-size: 13px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; padding: 24px; flex: 1; }
+  .panel.active { display: flex; gap: 24px; }
+
+  /* ── Layout ─────────────────────────────────── */
+  .col-left  { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .col-right { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Cards ───────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
+  .card-body { padding: 14px; }
+
+  /* ── Tables (track/candidate rows) ───────────── */
+  .row-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .track-row, .candidate-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .track-row    { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+  .candidate-row { grid-template-columns: 1fr 1fr 1fr auto; }
+
+  .track-row input, .candidate-row input,
+  .track-row select, .candidate-row select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 5px 8px;
+    width: 100%;
+  }
+
+  .track-row input:focus, .candidate-row input:focus,
+  .track-row select:focus, .candidate-row select:focus {
+    outline: none; border-color: var(--accent);
+  }
+
+  .del-btn {
+    background: none; border: none; color: var(--bad);
+    cursor: pointer; font-size: 16px; line-height: 1;
+    padding: 0 4px; align-self: center;
+    opacity: 0.6; transition: opacity 0.2s;
+  }
+  .del-btn:hover { opacity: 1; }
+
+  .add-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px;
+    text-align: center;
+    width: 100%;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Buttons ─────────────────────────────────── */
+  .run-btn {
+    background: var(--accent);
+    border: none; border-radius: var(--radius);
+    color: #fff; cursor: pointer;
+    font-family: var(--font); font-size: 13px; font-weight: 600;
+    padding: 10px 20px; width: 100%;
+    transition: opacity 0.2s;
+  }
+  .run-btn:hover { opacity: 0.85; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .preset-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+  .preset-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font); font-size: 11px;
+    padding: 4px 10px;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .preset-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── Results ─────────────────────────────────── */
+  .result-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-item:last-child { border-bottom: none; }
+
+  .result-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .result-name { font-weight: 600; font-size: 13px; }
+  .result-score {
+    font-size: 12px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px;
+  }
+
+  .score-bar-wrap {
+    background: var(--bg);
+    border-radius: 3px; height: 5px; margin-bottom: 6px; overflow: hidden;
+  }
+  .score-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+
+  .result-reason { color: var(--muted); font-size: 11px; }
+
+  /* ── Track features panel ────────────────────── */
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .feature-item { background: var(--surface2); border-radius: 6px; padding: 10px 12px; }
+  .feature-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; }
+  .feature-value { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .feature-null  { font-size: 14px; color: var(--muted); }
+
+  /* ── Raw JSON ────────────────────────────────── */
+  .raw-json {
+    background: var(--bg);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* ── Misc ────────────────────────────────────── */
+  .field-label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted);
+    display: block; margin-bottom: 4px;
+  }
+
+  input[type="text"], input[type="number"], select, textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font); font-size: 12px;
+    padding: 7px 10px;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent);
+  }
+
+  .placeholder {
+    color: var(--muted); font-size: 12px;
+    text-align: center; padding: 24px;
+  }
+
+  .row-label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted);
+    grid-column: 1 / -1;
+  }
+
+  .source-badge {
+    font-size: 10px; padding: 2px 6px;
+    border-radius: 3px; background: var(--surface2);
+    border: 1px solid var(--border); color: var(--muted);
+  }
+
+  /* single-track panel */
+  #ft-panel .panel-inner {
+    display: flex; gap: 24px;
+  }
+  #ft-panel .col-left  { flex: 0 0 320px; }
+  #ft-panel .col-right { flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div id="status-dot"></div>
+  <h1>ML Engine Test UI</h1>
+  <span id="status-text">checking…</span>
+  <span style="flex:1"></span>
+  <span style="color:var(--muted);font-size:11px;">localhost:8000</span>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('recommend')">Recommend</button>
+  <button class="tab" onclick="switchTab('features')">Track Features</button>
+</div>
+
+<!-- ═══════════════════════════════════ RECOMMEND ═══════════════════════════════════ -->
+<div id="recommend-panel" class="panel active">
+
+  <div class="col-left">
+
+    <!-- Presets -->
+    <div class="card">
+      <div class="card-header">Quick Presets</div>
+      <div class="card-body">
+        <div class="preset-bar">
+          <button class="preset-btn" onclick="loadPreset('progressive')">Progressive House</button>
+          <button class="preset-btn" onclick="loadPreset('dubstep')">Dubstep / Bass</button>
+          <button class="preset-btn" onclick="loadPreset('techno')">Techno</button>
+          <button class="preset-btn" onclick="loadPreset('trance')">Trance</button>
+          <button class="preset-btn" onclick="loadPreset('mixed')">Mixed Taste</button>
+          <button class="preset-btn" onclick="clearAll()" style="margin-left:auto;color:var(--bad)">Clear All</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved Tracks -->
+    <div class="card">
+      <div class="card-header">
+        Saved Tracks
+        <span style="color:var(--muted);font-weight:400;font-size:10px;">≥ 3 for recency-weighted profile</span>
+      </div>
+      <div class="card-body">
+        <div id="tracks-list" class="row-list"></div>
+        <button class="add-btn" onclick="addTrack()" style="margin-top:8px">+ Add Track</button>
+      </div>
+    </div>
+
+    <!-- Candidates -->
+    <div class="card">
+      <div class="card-header">Candidate Artists</div>
+      <div class="card-body">
+        <div id="candidates-list" class="row-list"></div>
+        <button class="add-btn" onclick="addCandidate()" style="margin-top:8px">+ Add Candidate</button>
+      </div>
+    </div>
+
+    <!-- Favorite Artists -->
+    <div class="card">
+      <div class="card-header">Favorite Artists <span style="color:var(--muted);font-weight:400;font-size:10px;">comma-separated</span></div>
+      <div class="card-body">
+        <input type="text" id="fav-artists" placeholder="e.g. Deadmau5, Eric Prydz" />
+      </div>
+    </div>
+
+    <button class="run-btn" onclick="runRecommend()">▶  Run Recommendation</button>
+  </div>
+
+  <div class="col-right">
+
+    <!-- Results -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;">
+      <div class="card-header">
+        Results
+        <span id="result-source" class="source-badge" style="display:none"></span>
+      </div>
+      <div id="results-body" style="flex:1;overflow-y:auto;">
+        <div class="placeholder">Run a recommendation to see scored artists</div>
+      </div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="card">
+      <div class="card-header">Raw Response</div>
+      <div class="card-body" style="padding:0">
+        <div class="raw-json" id="raw-response">—</div>
+      </div>
+    </div>
+
+    <!-- Payload sent -->
+    <div class="card">
+      <div class="card-header">Payload Sent</div>
+      <div class="card-body" style="padding:0">
+        <div class="raw-json" id="raw-payload">—</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ TRACK FEATURES ═══════════════════════════════════ -->
+<div id="features-panel" class="panel">
+  <div class="col-left" style="max-width:320px;">
+    <div class="card">
+      <div class="card-header">Track Lookup</div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label class="field-label">Artist</label>
+          <input type="text" id="ft-artist" placeholder="e.g. Deadmau5" />
+        </div>
+        <div>
+          <label class="field-label">Song</label>
+          <input type="text" id="ft-song" placeholder="e.g. Strobe" />
+        </div>
+        <button class="run-btn" onclick="runTrackFeatures()">▶  Fetch Features</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Raw Response</div>
+      <div class="card-body" style="padding:0">
+        <div class="raw-json" id="ft-raw">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-right" style="flex:1;">
+    <div class="card" style="flex:1;">
+      <div class="card-header">Audio Features</div>
+      <div id="ft-results" class="card-body">
+        <div class="placeholder">Enter an artist + song and fetch features</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const BASE = 'http://localhost:8000';
+
+const GENRES = [
+  'house','tech house','bass house','techno','hard techno',
+  'dubstep','drum & bass','trance','trap','future bass',
+  'hardstyle','ambient','progressive','psytrance','electro'
+];
+
+const VIBES = ['Dark','Groovy','Bass Heavy','Euphoric','Energetic','Chill','Trippy','Festival'];
+
+// ── Health check ────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  try {
+    const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    const ok = r.ok;
+    dot.className  = ok ? 'up' : 'down';
+    text.textContent = ok ? 'engine running' : `HTTP ${r.status}`;
+  } catch {
+    dot.className  = 'down';
+    text.textContent = 'engine offline';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 10_000);
+
+// ── Tab switching ───────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['recommend','features'][i] === name);
+  });
+  document.getElementById('recommend-panel').classList.toggle('active', name === 'recommend');
+  document.getElementById('features-panel').classList.toggle('active', name === 'features');
+}
+
+// ── Track rows ──────────────────────────────────────────────────────────────
+let trackId = 0;
+function addTrack(data = {}) {
+  const id = trackId++;
+  const div = document.createElement('div');
+  div.className = 'track-row';
+  div.dataset.id = id;
+
+  const today = new Date().toISOString().slice(0,10);
+  const addedAt = data.added_at ? data.added_at.slice(0,10) : today;
+
+  div.innerHTML = `
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Artist</div>
+      <input type="text" placeholder="Artist" class="t-artist" value="${data.artist_name || ''}" />
+    </div>
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Song</div>
+      <input type="text" placeholder="Song" class="t-song" value="${data.song_name || ''}" />
+    </div>
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Genres (comma)</div>
+      <input type="text" placeholder="progressive, techno" class="t-genres"
+             value="${(data.genres||[]).join(', ')}" />
+    </div>
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Vibes (comma)</div>
+      <input type="text" placeholder="Dark, Energetic" class="t-vibes"
+             value="${(data.vibes||[]).join(', ')}" />
+    </div>
+    <button class="del-btn" onclick="this.closest('.track-row').remove()">×</button>
+  `;
+  document.getElementById('tracks-list').appendChild(div);
+}
+
+// ── Candidate rows ──────────────────────────────────────────────────────────
+let candId = 0;
+function addCandidate(data = {}) {
+  const id = candId++;
+  const div = document.createElement('div');
+  div.className = 'candidate-row';
+  div.dataset.id = id;
+
+  div.innerHTML = `
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Artist name</div>
+      <input type="text" placeholder="Artist" class="c-name" value="${data.name || ''}" />
+    </div>
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Genres (comma)</div>
+      <input type="text" placeholder="techno, dark techno" class="c-genres"
+             value="${(data.genres||[]).join(', ')}" />
+    </div>
+    <div>
+      <div class="row-label" style="margin-bottom:4px">Popularity (0-100)</div>
+      <input type="number" min="0" max="100" class="c-pop"
+             value="${data.popularity ?? 70}" style="width:100%" />
+    </div>
+    <button class="del-btn" onclick="this.closest('.candidate-row').remove()">×</button>
+  `;
+  document.getElementById('candidates-list').appendChild(div);
+}
+
+// ── Read form state ─────────────────────────────────────────────────────────
+function readTracks() {
+  return [...document.querySelectorAll('.track-row')].map((row, i) => ({
+    artist_name: row.querySelector('.t-artist').value.trim(),
+    song_name:   row.querySelector('.t-song').value.trim(),
+    genres: row.querySelector('.t-genres').value.split(',').map(s => s.trim()).filter(Boolean),
+    vibes:  row.querySelector('.t-vibes').value.split(',').map(s => s.trim()).filter(Boolean),
+    added_at: new Date(Date.now() - i * 86400_000 * 3).toISOString(),
+  })).filter(t => t.artist_name);
+}
+
+function readCandidates() {
+  return [...document.querySelectorAll('.candidate-row')].map((row, i) => ({
+    id:     i,
+    name:   row.querySelector('.c-name').value.trim(),
+    genres: row.querySelector('.c-genres').value.split(',').map(s => s.trim()).filter(Boolean),
+    vibes:  [],
+    top_tracks: [],
+    popularity: parseInt(row.querySelector('.c-pop').value) || 70,
+  })).filter(c => c.name);
+}
+
+function readFavs() {
+  return document.getElementById('fav-artists').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// ── Run recommend ───────────────────────────────────────────────────────────
+async function runRecommend() {
+  const btn = document.querySelector('.run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+
+  const payload = {
+    user_id: 1,
+    saved_tracks: readTracks(),
+    favorite_artist_names: readFavs(),
+    candidate_artists: readCandidates(),
+  };
+
+  document.getElementById('raw-payload').textContent = JSON.stringify(payload, null, 2);
+
+  try {
+    const r = await fetch(`${BASE}/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    const data = await r.json();
+    document.getElementById('raw-response').textContent = JSON.stringify(data, null, 2);
+    renderResults(data, payload);
+  } catch (e) {
+    document.getElementById('raw-response').textContent = `Error: ${e.message}`;
+    document.getElementById('results-body').innerHTML =
+      `<div class="placeholder" style="color:var(--bad)">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶  Run Recommendation';
+  }
+}
+
+function renderResults(data, payload) {
+  const badge = document.getElementById('result-source');
+  badge.textContent = data.source || 'ml';
+  badge.style.display = '';
+
+  const body = document.getElementById('results-body');
+
+  if (!data.artists || data.artists.length === 0) {
+    // Build a helpful diagnosis
+    const trackCount = payload.saved_tracks.length;
+    let hint = '';
+    if (trackCount < 3) {
+      hint = `⚠️ Only ${trackCount} saved track(s) — need ≥ 3 for recency-weighted profile. `;
+    }
+    const favNames = (payload.favorite_artist_names || []).map(n => n.toLowerCase());
+    const candNames = (payload.candidate_artists || []).map(c => c.name.toLowerCase());
+    const overlap = favNames.filter(f => candNames.includes(f));
+    if (trackCount < 3 && overlap.length === 0) {
+      hint += `Favorite artists don't match any candidate → user_profile = null → empty result.`;
+    }
+    body.innerHTML = `<div class="placeholder" style="color:var(--warn)">
+      Empty artists array.<br><br>${hint}
+    </div>`;
+    return;
+  }
+
+  // Map id → name for display
+  const idToName = {};
+  (payload.candidate_artists || []).forEach(c => { idToName[c.id] = c.name; });
+
+  body.innerHTML = data.artists.map((a, rank) => {
+    const score = a.score ?? 0;
+    const pct   = Math.max(0, Math.min(100, score * 100)).toFixed(0);
+    const color = score >= 0.6 ? 'var(--good)' : score >= 0.35 ? 'var(--warn)' : 'var(--bad)';
+    const name  = idToName[a.id] || `Artist #${a.id}`;
+
+    return `<div class="result-item">
+      <div class="result-header">
+        <span class="result-name">#${rank+1} ${name}</span>
+        <span class="result-score" style="color:${color}">${score.toFixed(3)}</span>
+      </div>
+      <div class="score-bar-wrap">
+        <div class="score-bar" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="result-reason">${a.reason || '—'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Track features ──────────────────────────────────────────────────────────
+async function runTrackFeatures() {
+  const artist = document.getElementById('ft-artist').value.trim();
+  const song   = document.getElementById('ft-song').value.trim();
+  if (!artist || !song) return;
+
+  const btn = document.querySelectorAll('.run-btn')[1];
+  btn.disabled = true; btn.textContent = '⏳ Fetching…';
+
+  try {
+    const r = await fetch(`${BASE}/track-features`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artist_name: artist, song_name: song }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const data = await r.json();
+    document.getElementById('ft-raw').textContent = JSON.stringify(data, null, 2);
+    renderFeatures(data);
+  } catch (e) {
+    document.getElementById('ft-raw').textContent = `Error: ${e.message}`;
+    document.getElementById('ft-results').innerHTML =
+      `<div class="placeholder" style="color:var(--bad)">${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '▶  Fetch Features';
+  }
+}
+
+function renderFeatures(data) {
+  const fields = [
+    { key: 'bpm_value',           label: 'BPM',           fmt: v => v.toFixed(1) },
+    { key: 'energy_score',        label: 'Energy',         fmt: v => v.toFixed(3) },
+    { key: 'danceability_score',  label: 'Danceability',   fmt: v => v.toFixed(3) },
+    { key: 'valence_score',       label: 'Valence',        fmt: v => v.toFixed(3) },
+    { key: 'darkness_score',      label: 'Darkness',       fmt: v => v.toFixed(3) },
+  ];
+
+  document.getElementById('ft-results').innerHTML = `
+    <div class="features-grid">
+      ${fields.map(f => {
+        const v = data[f.key];
+        return `<div class="feature-item">
+          <div class="feature-label">${f.label}</div>
+          ${v != null
+            ? `<div class="feature-value">${f.fmt(v)}</div>`
+            : `<div class="feature-null">null</div>`}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:16px;color:var(--muted);font-size:11px;line-height:1.8">
+      <strong style="color:var(--text)">Score interpretation</strong><br>
+      Energy, Danceability, Valence, Darkness: range [−1, 1] — higher = more of that quality<br>
+      BPM: raw beats per minute (0 = unknown)<br>
+      null = Deezer/Last.fm returned no data for this track
+    </div>
+  `;
+}
+
+// ── Presets ─────────────────────────────────────────────────────────────────
+const PRESETS = {
+  progressive: {
+    tracks: [
+      { artist_name:'Deadmau5',   song_name:'Strobe',        genres:['progressive'], vibes:['Dark','Energetic'] },
+      { artist_name:'Eric Prydz', song_name:'Pjanoo',        genres:['progressive'], vibes:['Euphoric','Energetic'] },
+      { artist_name:'Lane 8',     song_name:'Atlas',         genres:['progressive'], vibes:['Euphoric','Chill'] },
+    ],
+    candidates: [
+      { name:'RÜFÜS DU SOL',  genres:['progressive'], popularity:88 },
+      { name:'Above & Beyond', genres:['trance','progressive'], popularity:82 },
+      { name:'Anjunadeep',     genres:['progressive'], popularity:65 },
+      { name:'Dom Dolla',      genres:['tech house'],  popularity:91 },
+    ],
+    favs: 'Deadmau5, Eric Prydz',
+  },
+  dubstep: {
+    tracks: [
+      { artist_name:'Skrillex',      song_name:'Scary Monsters and Nice Sprites', genres:['dubstep'], vibes:['Bass Heavy','Energetic'] },
+      { artist_name:'Excision',      song_name:'Throwin Elbows',                  genres:['dubstep'], vibes:['Bass Heavy','Dark'] },
+      { artist_name:'Virtual Riot',  song_name:'Energy Drink',                    genres:['dubstep'], vibes:['Bass Heavy','Energetic'] },
+    ],
+    candidates: [
+      { name:'Rezz',        genres:['techno'],   vibes:['Dark','Trippy'], popularity:75 },
+      { name:'Flux Pavilion',genres:['dubstep'], vibes:['Bass Heavy'],   popularity:73 },
+      { name:'Subtronics',  genres:['dubstep'],  vibes:['Bass Heavy','Dark'], popularity:80 },
+      { name:'Dom Dolla',   genres:['tech house'],vibes:['Groovy'],      popularity:91 },
+    ],
+    favs: 'Skrillex, Excision',
+  },
+  techno: {
+    tracks: [
+      { artist_name:'Charlotte de Witte', song_name:'Doppler',     genres:['techno'], vibes:['Dark','Energetic'] },
+      { artist_name:'Amelie Lens',        song_name:'Exhale',       genres:['techno'], vibes:['Dark','Energetic'] },
+      { artist_name:'Richie Hawtin',      song_name:'Spastik',      genres:['techno'], vibes:['Dark'] },
+    ],
+    candidates: [
+      { name:'SPFDJ',          genres:['hard techno'], vibes:['Dark','Energetic'], popularity:72 },
+      { name:'Alignment',      genres:['techno'],      vibes:['Dark'],             popularity:68 },
+      { name:'Fatima Hajji',   genres:['techno'],      vibes:['Dark','Energetic'], popularity:62 },
+      { name:'Fisher',         genres:['tech house'],  vibes:['Groovy','Energetic'],popularity:88 },
+    ],
+    favs: 'Charlotte de Witte, Amelie Lens',
+  },
+  trance: {
+    tracks: [
+      { artist_name:'Armin van Buuren', song_name:'This Is What It Feels Like', genres:['trance'], vibes:['Euphoric','Energetic'] },
+      { artist_name:'Ferry Corsten',    song_name:'Punk',                        genres:['trance'], vibes:['Energetic'] },
+      { artist_name:'Paul van Dyk',     song_name:'For an Angel',               genres:['trance'], vibes:['Euphoric'] },
+    ],
+    candidates: [
+      { name:'Tiësto',          genres:['trance'],            vibes:['Euphoric','Energetic'], popularity:92 },
+      { name:'Above & Beyond',  genres:['trance','progressive'],vibes:['Euphoric'],            popularity:82 },
+      { name:'Gareth Emery',    genres:['trance'],            vibes:['Energetic','Euphoric'], popularity:72 },
+      { name:'Deadmau5',        genres:['progressive house'], vibes:['Dark','Energetic'],     popularity:85 },
+    ],
+    favs: 'Armin van Buuren',
+  },
+  mixed: {
+    tracks: [
+      { artist_name:'Caribou',    song_name:'Can\'t Do Without You', genres:['house'],   vibes:['Groovy','Chill'] },
+      { artist_name:'Four Tet',   song_name:'Two Thousand and Seventeen', genres:['ambient','house'], vibes:['Chill','Trippy'] },
+      { artist_name:'Flume',      song_name:'Never Be Like You',     genres:['future bass'], vibes:['Euphoric'] },
+    ],
+    candidates: [
+      { name:'Jamie xx',      genres:['house'],              vibes:['Groovy','Chill'],  popularity:78 },
+      { name:'Bonobo',        genres:['ambient'],            vibes:['Chill','Trippy'],  popularity:74 },
+      { name:'Kaytranada',    genres:['house'],              vibes:['Groovy'],          popularity:80 },
+      { name:'Skrillex',      genres:['dubstep'],            vibes:['Bass Heavy','Energetic'],popularity:91 },
+    ],
+    favs: 'Four Tet, Caribou',
+  },
+};
+
+function loadPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  clearAll(false);
+  p.tracks.forEach(t => addTrack(t));
+  p.candidates.forEach(c => addCandidate(c));
+  document.getElementById('fav-artists').value = p.favs;
+}
+
+function clearAll(confirm = true) {
+  document.getElementById('tracks-list').innerHTML = '';
+  document.getElementById('candidates-list').innerHTML = '';
+  document.getElementById('fav-artists').value = '';
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+loadPreset('progressive');
+</script>
+</body>
+</html>
