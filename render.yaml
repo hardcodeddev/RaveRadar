@@ -1,0 +1,27 @@
+services:
+  - name: raveradar-api
+    type: web
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: Spotify__ClientId
+        sync: false
+      - key: Spotify__ClientSecret
+        sync: false
+      - key: EdmTrain__ApiKey
+        sync: false
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: RecommendationEngine__Url
+        value: http://raveradar-ml:8000
+
+  - name: raveradar-ml
+    type: pserv
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ml
+    envVars:
+      - key: LASTFM_API_KEY
+        sync: false

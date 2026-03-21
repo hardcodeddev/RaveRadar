@@ -1,0 +1,28 @@
+# Stage 1: Build React frontend
+FROM node:22-alpine AS client-build
+WORKDIR /src/RaveRadar.Client
+COPY RaveRadar.Client/package*.json ./
+RUN npm install
+COPY RaveRadar.Client/ ./
+RUN npm run build
+
+# Stage 2: Build ASP.NET Core backend
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS server-build
+WORKDIR /src
+COPY RaveRadar.sln .
+COPY RaveRadar.Api/*.csproj ./RaveRadar.Api/
+RUN dotnet restore
+COPY RaveRadar.Api/ ./RaveRadar.Api/
+COPY edm_artists_dataset.txt ./RaveRadar.Api/
+COPY --from=client-build /src/RaveRadar.Client/dist/ ./RaveRadar.Api/wwwroot/
+RUN dotnet publish RaveRadar.Api/RaveRadar.Api.csproj -c Release -o /app/out
+
+# Stage 3: Runtime — .NET only, no Python/supervisord
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=server-build /app/out .
+RUN mkdir -p /app/data && chmod 777 /app/data
+ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/RaveRadar.db"
+ENV ASPNETCORE_ENVIRONMENT=Production
+EXPOSE ${PORT:-10000}
+ENTRYPOINT ["/bin/sh", "-c", "export ASPNETCORE_URLS=\"http://+:${PORT:-8080}\" && exec dotnet RaveRadar.Api.dll"]
