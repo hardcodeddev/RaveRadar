@@ -61,53 +61,73 @@ public class EdmTrainService
 
     private async Task ProcessEvents(List<EdmEvent> edmEvents)
     {
+        // Load all existing IDs in one query to avoid N+1 FindAsync calls
+        var incomingIds = edmEvents.Select(e => $"EdmTrain:{e.Id}").ToHashSet();
+        var existingIds = (await _context.Events
+            .Where(e => incomingIds.Contains(e.Id))
+            .Select(e => e.Id)
+            .ToListAsync())
+            .ToHashSet();
+
+        // Track IDs staged for insert in this batch to avoid within-batch duplicates
+        var stagedIds = new HashSet<string>();
+
         foreach (var edmEvent in edmEvents)
         {
             var internalId = $"EdmTrain:{edmEvent.Id}";
-            var existing = await _context.Events.FindAsync(internalId);
-
             var artistNames = edmEvent.ArtistList?.Select(a => a.Name).ToList() ?? new List<string>();
-            
-            // Try to infer genres from name or artists (simplified)
-            var genreNames = new List<string> { "Electronic" }; 
+            var eventName = edmEvent.Name ?? (artistNames.Any() ? string.Join(", ", artistNames) : "EDM Event");
+            var eventDate = DateTime.TryParse(edmEvent.Date, out var date) ? date : DateTime.Now;
 
-            var newEvent = new Event
+            if (existingIds.Contains(internalId))
             {
-                Id = internalId,
-                Name = edmEvent.Name ?? (artistNames.Any() ? string.Join(" , ", artistNames) : "EDM Event"),
-                Date = DateTime.TryParse(edmEvent.Date, out var date) ? date : DateTime.Now,
-                Venue = edmEvent.Venue?.Name,
-                City = edmEvent.Venue?.Location,
-                TicketUrl = edmEvent.Link,
-                Latitude = edmEvent.Venue?.Latitude ?? 0,
-                Longitude = edmEvent.Venue?.Longitude ?? 0,
-                ArtistNames = artistNames,
-                GenreNames = genreNames,
-                Source = "EdmTrain",
-                SourceId = edmEvent.Id.ToString(),
-                // EdmTrain doesn't provide images, use a nice EDM-themed placeholder
-                ImageUrl = $"https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=1000&sig={edmEvent.Id}"
-            };
-
-            if (existing == null)
-            {
-                _context.Events.Add(newEvent);
+                // Update — FindAsync hits the local cache first so no extra DB round-trip
+                var existing = await _context.Events.FindAsync(internalId);
+                if (existing != null)
+                {
+                    existing.Name = eventName;
+                    existing.Date = eventDate;
+                    existing.Venue = edmEvent.Venue?.Name;
+                    existing.City = edmEvent.Venue?.Location;
+                    existing.TicketUrl = edmEvent.Link;
+                    existing.ArtistNames = artistNames;
+                    existing.Latitude = edmEvent.Venue?.Latitude ?? 0;
+                    existing.Longitude = edmEvent.Venue?.Longitude ?? 0;
+                }
             }
-            else
+            else if (stagedIds.Add(internalId))
             {
-                // Update existing
-                existing.Name = newEvent.Name;
-                existing.Date = newEvent.Date;
-                existing.Venue = newEvent.Venue;
-                existing.City = newEvent.City;
-                existing.TicketUrl = newEvent.TicketUrl;
-                existing.ArtistNames = newEvent.ArtistNames;
-                existing.Latitude = newEvent.Latitude;
-                existing.Longitude = newEvent.Longitude;
+                // New event — only add once even if API returns duplicate IDs
+                _context.Events.Add(new Event
+                {
+                    Id = internalId,
+                    Name = eventName,
+                    Date = eventDate,
+                    Venue = edmEvent.Venue?.Name,
+                    City = edmEvent.Venue?.Location,
+                    TicketUrl = edmEvent.Link,
+                    Latitude = edmEvent.Venue?.Latitude ?? 0,
+                    Longitude = edmEvent.Venue?.Longitude ?? 0,
+                    ArtistNames = artistNames,
+                    GenreNames = new List<string> { "Electronic" },
+                    Source = "EdmTrain",
+                    SourceId = edmEvent.Id.ToString(),
+                    ImageUrl = $"https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=1000&sig={edmEvent.Id}"
+                });
             }
         }
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UNIQUE constraint") == true
+                                           || ex.InnerException?.Message.Contains("duplicate key") == true)
+        {
+            // Concurrent sync job already inserted these rows — safe to discard this batch
+            _logger.LogWarning("Skipping duplicate events from concurrent sync run.");
+            _context.ChangeTracker.Clear();
+        }
     }
 }
 
