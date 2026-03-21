@@ -31,7 +31,7 @@ RUN mkdir -p /app/data && chmod 777 /app/data
 # Install Python + supervisor for the ML sidecar
 RUN apt-get update && apt-get install -y python3 python3-pip supervisor && rm -rf /var/lib/apt/lists/*
 COPY recommendation-engine/requirements.txt /app/engine/requirements.txt
-RUN pip3 install --no-cache-dir -r /app/engine/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /app/engine/requirements.txt
 COPY recommendation-engine/ /app/engine/
 COPY supervisord.conf /etc/supervisord.conf
 
