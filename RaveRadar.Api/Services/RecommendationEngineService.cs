@@ -53,7 +53,7 @@ public class RecommendationEngineService
     {
         _http = httpClientFactory.CreateClient("RecommendationEngine");
         _baseUrl = config["RecommendationEngine:Url"] ?? "http://localhost:8000";
-        _http.Timeout = TimeSpan.FromSeconds(10);
+        _http.Timeout = TimeSpan.FromSeconds(25);
     }
 
     public async Task<RecommendEngineResult?> GetRecommendations(

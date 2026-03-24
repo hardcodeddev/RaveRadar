@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import numpy as np
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -26,6 +27,13 @@ from recommender import build_user_profile, score_candidates
 
 app = FastAPI(title="RaveRadar ML Engine")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/health")
 def health():
@@ -37,12 +45,22 @@ async def _fetch_features(
     song: str,
     genres: list[str],
     vibes: list[str],
+    fetch_tags: bool = True,
 ) -> tuple[np.ndarray, float, dict | None, list[str]]:
-    """Fetch Deezer + Last.fm in parallel and return (vector, bpm, deezer_data, tags)."""
-    deezer, tags = await asyncio.gather(
-        fetch_deezer_track(artist, song),
-        fetch_musicbrainz_tags(artist, song),
-    )
+    """Fetch Deezer (always) + MusicBrainz tags (saved tracks only).
+
+    Candidates already carry genres/vibes from the C# DB so tag enrichment
+    is skipped for them — this cuts the cold-path request count from ~46 to
+    ~6 serialised MB calls, keeping total latency well inside the 25 s timeout.
+    """
+    if fetch_tags:
+        deezer, tags = await asyncio.gather(
+            fetch_deezer_track(artist, song),
+            fetch_musicbrainz_tags(artist, song),
+        )
+    else:
+        deezer = await fetch_deezer_track(artist, song)
+        tags = []
     vec = build_feature_vector(deezer, tags, genres, vibes)
     bpm = float((deezer or {}).get("bpm", 0) or 0)
     return vec, bpm, deezer, tags
@@ -64,6 +82,7 @@ async def recommend(req: RecommendRequest):
             a.top_tracks[0] if a.top_tracks else a.name,
             a.genres,
             a.vibes,
+            fetch_tags=False,  # candidates already have genres/vibes from the DB
         )
         for a in top_candidates
     ]

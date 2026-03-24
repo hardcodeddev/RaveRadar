@@ -15,7 +15,7 @@ _mb_sem: asyncio.Semaphore | None = None
 def _get_mb_sem() -> asyncio.Semaphore:
     global _mb_sem
     if _mb_sem is None:
-        _mb_sem = asyncio.Semaphore(1)
+        _mb_sem = asyncio.Semaphore(3)
     return _mb_sem
 
 # 15 canonical EDM genres (must match GENRE_LIST in recommender.py)
@@ -43,12 +43,18 @@ async def fetch_deezer_track(artist: str, title: str) -> dict | None:
             )
             data = r.json()
             if data.get("data"):
-                track = data["data"][0]
+                search_track = data["data"][0]
+                track_id = search_track["id"]
+
+                # /search omits bpm and gain — fetch the full track record
+                r2 = await client.get(f"https://api.deezer.com/track/{track_id}")
+                track = r2.json()
+
                 result = {
                     "bpm": track.get("bpm", 0) or 0,
                     "gain": track.get("gain", 0) or 0,
                     "duration": track.get("duration", 0),
-                    "rank": track.get("rank", 0),
+                    "rank": search_track.get("rank", 0),
                 }
                 cache.set(key, result, TTL_DEEZER)
                 return result
@@ -60,11 +66,12 @@ async def fetch_deezer_track(artist: str, title: str) -> dict | None:
 async def fetch_musicbrainz_tags(artist: str, song: str) -> list[str]:
     """Fetch community tags from MusicBrainz (no API key required).
 
-    Two-step: search recording → MBID, then lookup tags for that recording.
-    Requests are serialised to 1/sec to respect MusicBrainz rate limits.
-    Results are cached for 12 h so cold-start cost only occurs once.
+    Uses artist-level tags rather than recording-level tags — artist tags are
+    consistently populated whereas recording tags are rarely submitted.
+    Results are cached for 12 h per artist name.
     """
-    key = f"mb:tags:{artist.lower()}:{song.lower()}"
+    # Cache keyed on artist only — tags are artist-level, song is irrelevant
+    key = f"mb:artist_tags:{artist.lower()}"
     cached = cache.get(key)
     if cached is not None:
         return cached
@@ -72,29 +79,25 @@ async def fetch_musicbrainz_tags(artist: str, song: str) -> list[str]:
     sem = _get_mb_sem()
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            # Step 1 — find recording MBID
+            # Step 1 — find artist MBID
             async with sem:
                 r1 = await client.get(
-                    "https://musicbrainz.org/ws/2/recording/",
+                    "https://musicbrainz.org/ws/2/artist/",
                     headers=_MB_HEADERS,
-                    params={
-                        "query": f'artist:"{artist}" AND recording:"{song}"',
-                        "fmt": "json",
-                        "limit": 1,
-                    },
+                    params={"query": f'artist:"{artist}"', "fmt": "json", "limit": 1},
                 )
 
-            recordings = r1.json().get("recordings", [])
-            if not recordings:
+            artists = r1.json().get("artists", [])
+            if not artists:
                 cache.set(key, [], TTL_MUSICBRAINZ)
                 return []
 
-            mbid = recordings[0]["id"]
+            mbid = artists[0]["id"]
 
-            # Step 2 — fetch tags for that recording
+            # Step 2 — fetch artist tags
             async with sem:
                 r2 = await client.get(
-                    f"https://musicbrainz.org/ws/2/recording/{mbid}",
+                    f"https://musicbrainz.org/ws/2/artist/{mbid}",
                     headers=_MB_HEADERS,
                     params={"inc": "tags", "fmt": "json"},
                 )
